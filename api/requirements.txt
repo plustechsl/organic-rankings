@@ -1,0 +1,9 @@
+fastapi
+uvicorn[standard]
+psycopg[binary]
+sqlalchemy
+pwdlib[argon2]
+PyJWT
+email-validator
+opensearch-py
+ddgs

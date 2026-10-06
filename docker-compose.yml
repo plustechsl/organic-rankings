@@ -1,0 +1,59 @@
+services:
+
+  opensearch:
+    image: opensearchproject/opensearch:latest
+    container_name: organic_rankings_opensearch
+    environment:
+      - discovery.type=single-node
+      - DISABLE_SECURITY_PLUGIN=true
+      - "OPENSEARCH_JAVA_OPTS=-Xms512m -Xmx512m"
+    ports:
+      - "9200:9200"
+      - "9600:9600"
+    volumes:
+      - opensearch_data:/usr/share/opensearch/data
+    restart: unless-stopped
+
+  postgres:
+    image: postgres:17
+    container_name: organic_rankings_postgres
+    environment:
+      POSTGRES_DB: organic_rankings
+      POSTGRES_USER: organic_rankings
+      POSTGRES_PASSWORD: organic_rankings_dev
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    container_name: organic_rankings_redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    restart: unless-stopped
+
+  api:
+    build:
+      context: ./api
+    container_name: organic_rankings_api
+    ports:
+      - "8000:8000"
+    environment:
+      - ACCESS_TOKEN_EXPIRE_MINUTES=43200
+    volumes:
+      - ./api/app:/app/app
+    depends_on:
+      - postgres
+      - opensearch
+      - redis
+    restart: unless-stopped
+    command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
+
+volumes:
+  opensearch_data:
+  postgres_data:
+  redis_data:
