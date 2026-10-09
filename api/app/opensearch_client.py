@@ -1,17 +1,21 @@
-import os
 import time
 
 from opensearchpy import OpenSearch
 from opensearchpy.exceptions import ConnectionError as OpenSearchConnectionError
 
-
-OPENSEARCH_HOST = os.getenv("OPENSEARCH_HOST", "opensearch")
-OPENSEARCH_PORT = int(os.getenv("OPENSEARCH_PORT", "9200"))
-
-LINKS_INDEX = "links"
+from app.config import (
+    LINKS_INDEX,
+    OPENSEARCH_HOST,
+    OPENSEARCH_PORT,
+)
 
 client = OpenSearch(
-    hosts=[{"host": OPENSEARCH_HOST, "port": OPENSEARCH_PORT}],
+    hosts=[
+        {
+            "host": OPENSEARCH_HOST,
+            "port": OPENSEARCH_PORT,
+        }
+    ],
     use_ssl=False,
     verify_certs=False,
 )
@@ -72,7 +76,7 @@ LINKS_INDEX_MAPPING = {
 }
 
 
-def wait_for_opensearch(max_retries: int = 30, delay_seconds: float = 2.0) -> None:
+def wait_for_opensearch(max_retries: int = 30, delay_seconds: float = 2.0):
     for attempt in range(1, max_retries + 1):
         try:
             if client.ping():
@@ -81,30 +85,31 @@ def wait_for_opensearch(max_retries: int = 30, delay_seconds: float = 2.0) -> No
             pass
 
         print(
-            f"[opensearch] Not ready yet, retrying "
-            f"({attempt}/{max_retries})..."
+            f"[opensearch] Not ready yet ({attempt}/{max_retries})..."
         )
         time.sleep(delay_seconds)
 
-    raise RuntimeError(
-        "Could not connect to OpenSearch after multiple retries"
-    )
+    raise RuntimeError("Could not connect to OpenSearch")
 
 
-def ensure_links_index() -> None:
+def ensure_links_index():
     wait_for_opensearch()
 
     if not client.indices.exists(index=LINKS_INDEX):
-        client.indices.create(index=LINKS_INDEX, body=LINKS_INDEX_MAPPING)
+        client.indices.create(
+            index=LINKS_INDEX,
+            body=LINKS_INDEX_MAPPING,
+        )
 
 
-def index_link_document(link) -> None:
+def index_link_document(link):
     link_list = link.link_list
     category = link_list.category if link_list else None
     subcategory = link_list.subcategory if link_list else None
 
     tag_names = [
-        relation.tag.name for relation in link.tag_relations
+        relation.tag.name
+        for relation in link.tag_relations
     ]
 
     document = {
@@ -130,8 +135,12 @@ def index_link_document(link) -> None:
     )
 
 
-def delete_link_document(link_id: int) -> None:
+def delete_link_document(link_id: int):
     try:
-        client.delete(index=LINKS_INDEX, id=str(link_id), refresh=True)
+        client.delete(
+            index=LINKS_INDEX,
+            id=str(link_id),
+            refresh=True,
+        )
     except Exception:
         pass

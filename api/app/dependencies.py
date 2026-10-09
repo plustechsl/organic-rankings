@@ -7,8 +7,7 @@ from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.models.user import User
-from app.security import ALGORITHM, SECRET_KEY
-
+from app.security import JWT_ALGORITHM, JWT_SECRET
 
 security = HTTPBearer(
     scheme_name="BearerAuth"
@@ -78,8 +77,8 @@ def get_current_user_optional(
     try:
         payload = jwt.decode(
             token,
-            SECRET_KEY,
-            algorithms=[ALGORITHM],
+            JWT_SECRET,
+            algorithms=[JWT_ALGORITHM],
         )
 
         user_id = payload.get("sub")

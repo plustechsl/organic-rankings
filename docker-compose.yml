@@ -8,52 +8,106 @@ services:
       - DISABLE_SECURITY_PLUGIN=true
       - "OPENSEARCH_JAVA_OPTS=-Xms512m -Xmx512m"
     ports:
-      - "9200:9200"
+      - "${OPENSEARCH_PORT:-9200}:9200"
       - "9600:9600"
     volumes:
       - opensearch_data:/usr/share/opensearch/data
     restart: unless-stopped
 
+    healthcheck:
+      test: [ "CMD-SHELL", "curl -fs http://localhost:9200 >/dev/null || exit 1" ]
+      interval: 20s
+      timeout: 10s
+      retries: 10
+      start_period: 30s
+
   postgres:
     image: postgres:17
     container_name: organic_rankings_postgres
     environment:
-      POSTGRES_DB: organic_rankings
-      POSTGRES_USER: organic_rankings
-      POSTGRES_PASSWORD: organic_rankings_dev
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
     ports:
-      - "5432:5432"
+      - "${POSTGRES_PORT:-5432}:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     restart: unless-stopped
+
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
 
   redis:
     image: redis:7-alpine
     container_name: organic_rankings_redis
     ports:
-      - "6379:6379"
+      - "${REDIS_PORT:-6379}:6379"
     volumes:
       - redis_data:/data
     restart: unless-stopped
+
+    healthcheck:
+      test: [ "CMD", "redis-cli", "ping" ]
+      interval: 10s
+      timeout: 3s
+      retries: 5
 
   api:
     build:
       context: ./api
     container_name: organic_rankings_api
     ports:
-      - "8000:8000"
+      - "${API_PORT:-8000}:8000"
     environment:
-      - ACCESS_TOKEN_EXPIRE_MINUTES=43200
-    volumes:
-      - ./api/app:/app/app
+      POSTGRES_HOST: ${POSTGRES_HOST}
+      POSTGRES_PORT: ${POSTGRES_PORT}
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+
+      REDIS_HOST: ${REDIS_HOST}
+      REDIS_PORT: ${REDIS_PORT}
+
+      OPENSEARCH_HOST: ${OPENSEARCH_HOST}
+      OPENSEARCH_PORT: ${OPENSEARCH_PORT}
+      OPENSEARCH_INDEX: ${OPENSEARCH_INDEX}
+
+      JWT_SECRET: ${JWT_SECRET}
+      ACCESS_TOKEN_EXPIRE_MINUTES: ${ACCESS_TOKEN_EXPIRE_MINUTES}
     depends_on:
-      - postgres
-      - opensearch
-      - redis
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      opensearch:
+        condition: service_healthy
+
     restart: unless-stopped
-    command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
+
+    healthcheck:
+      test: [ "CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+
+  frontend:
+    build:
+      context: ./web
+    container_name: organic_rankings_frontend
+    ports:
+      - "${FRONTEND_PORT:-3000}:3000"
+    depends_on:
+      api:
+        condition: service_healthy
+    restart: unless-stopped
 
 volumes:
   opensearch_data:
   postgres_data:
   redis_data:
+
