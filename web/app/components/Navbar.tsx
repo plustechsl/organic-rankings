@@ -44,32 +44,39 @@ export default function Navbar() {
     window.location.href = "/";
   }
 
-  if (loading) {
-    return <div className="h-5 w-20" />;
-  }
+  return (
+    <div className="flex items-center gap-4 text-sm">
+      <Link
+        href="/donate"
+        className="text-gray-600 transition hover:text-gray-900"
+      >
+        Donar
+      </Link>
 
-  if (user) {
-    return (
-      <div className="flex items-center gap-4 text-sm">
-        <Link href="/profile" className="text-gray-600 transition hover:text-gray-900">
-          Hola, <span className="font-medium text-gray-900">{user.username}</span>
-        </Link>
-        <button
-          onClick={handleLogout}
+      {loading && <div className="h-5 w-20" />}
+
+      {!loading && user && (
+        <>
+          <Link href="/profile" className="text-gray-600 transition hover:text-gray-900">
+            Hola, <span className="font-medium text-gray-900">{user.username}</span>
+          </Link>
+          <button
+            onClick={handleLogout}
+            className="text-gray-600 transition hover:text-gray-900"
+          >
+            Cerrar sesión
+          </button>
+        </>
+      )}
+
+      {!loading && !user && (
+        <Link
+          href="/login"
           className="text-gray-600 transition hover:text-gray-900"
         >
-          Cerrar sesión
-        </button>
-      </div>
-    );
-  }
-
-  return (
-    <Link
-      href="/login"
-      className="text-sm text-gray-600 transition hover:text-gray-900"
-    >
-      Iniciar sesión
-    </Link>
+          Iniciar sesión
+        </Link>
+      )}
+    </div>
   );
 }
