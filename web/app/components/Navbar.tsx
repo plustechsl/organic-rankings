@@ -51,6 +51,12 @@ export default function Navbar() {
   if (user) {
     return (
       <div className="flex items-center gap-4 text-sm">
+        <Link
+          href="/donate"
+          className="rounded-full bg-gray-900 px-4 py-2 font-medium text-white transition hover:bg-gray-700"
+        >
+          Donaciones
+        </Link>
         <Link href="/profile" className="text-gray-600 transition hover:text-gray-900">
           Hola, <span className="font-medium text-gray-900">{user.username}</span>
         </Link>
@@ -65,11 +71,19 @@ export default function Navbar() {
   }
 
   return (
-    <Link
-      href="/login"
-      className="text-sm text-gray-600 transition hover:text-gray-900"
-    >
-      Iniciar sesión
-    </Link>
+    <div className="flex items-center gap-4 text-sm">
+      <Link
+        href="/donate"
+        className="rounded-full bg-gray-900 px-4 py-2 font-medium text-white transition hover:bg-gray-700"
+      >
+        Donaciones
+      </Link>
+      <Link
+        href="/login"
+        className="text-gray-600 transition hover:text-gray-900"
+      >
+        Iniciar sesión
+      </Link>
+    </div>
   );
 }
