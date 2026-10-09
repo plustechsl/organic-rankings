@@ -19,14 +19,14 @@ export default function DonatePage() {
     setError(null);
 
     if (!DONATE_URL) {
-      setError("El pago de donaciones todava no est configurado.");
+      setError("El pago de donaciones todavía no está configurado.");
       return;
     }
 
     const value = customAmount ? Number(customAmount) : amount;
 
     if (!value || value <= 0) {
-      setError("Introduce un importe vlido.");
+      setError("Introduce un importe válido.");
       return;
     }
 
@@ -60,7 +60,7 @@ export default function DonatePage() {
 
         <p className="mb-8 text-gray-500">
           Organic Rankings no lleva publicidad ni vende posiciones. Si te resulta
-          til, puedes apoyar el proyecto con una donacin. El pago se completa
+          útil, puedes apoyar el proyecto con una donación. El pago se completa
           en una plataforma externa segura.
         </p>
 
@@ -80,9 +80,13 @@ export default function DonatePage() {
                       setAmount(value);
                       setCustomAmount("");
                     }}
-                    className={ounded-full border px-5 py-2 text-sm font-medium transition }
+                    className={`rounded-full border px-5 py-2 text-sm font-medium transition ${
+                      selected
+                        ? "border-gray-900 bg-gray-900 text-white"
+                        : "border-gray-300 text-gray-700 hover:bg-gray-50"
+                    }`}
                   >
-                    {value} 
+                    {value} €
                   </button>
                 );
               })}
@@ -94,7 +98,7 @@ export default function DonatePage() {
               htmlFor="custom-amount"
               className="mb-1 block text-sm text-gray-600"
             >
-              Otro importe ()
+              Otro importe (€)
             </label>
             <input
               id="custom-amount"
@@ -122,10 +126,10 @@ export default function DonatePage() {
           </button>
 
           <p className="text-center text-xs text-gray-400">
-            Sers redirigido a la plataforma de pago para completar la donacin.
+            Serás redirigido a la plataforma de pago para completar la donación.
           </p>
         </form>
       </section>
     </main>
   );
-}
+}
