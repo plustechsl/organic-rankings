@@ -1,4 +1,4 @@
-"use client";
+ï»¿"use client";
 
 import Link from "next/link";
 import { FormEvent, useState } from "react";
@@ -19,14 +19,14 @@ export default function DonatePage() {
     setError(null);
 
     if (!DONATE_URL) {
-      setError("El pago de donaciones todavía no está configurado.");
+      setError("El pago de donaciones todava no est configurado.");
       return;
     }
 
     const value = customAmount ? Number(customAmount) : amount;
 
     if (!value || value <= 0) {
-      setError("Introduce un importe válido.");
+      setError("Introduce un importe vlido.");
       return;
     }
 
@@ -60,7 +60,7 @@ export default function DonatePage() {
 
         <p className="mb-8 text-gray-500">
           Organic Rankings no lleva publicidad ni vende posiciones. Si te resulta
-          útil, puedes apoyar el proyecto con una donación. El pago se completa
+          til, puedes apoyar el proyecto con una donacin. El pago se completa
           en una plataforma externa segura.
         </p>
 
@@ -82,7 +82,7 @@ export default function DonatePage() {
                     }}
                     className={ounded-full border px-5 py-2 text-sm font-medium transition }
                   >
-                    {value} €
+                    {value} 
                   </button>
                 );
               })}
@@ -94,7 +94,7 @@ export default function DonatePage() {
               htmlFor="custom-amount"
               className="mb-1 block text-sm text-gray-600"
             >
-              Otro importe (€)
+              Otro importe ()
             </label>
             <input
               id="custom-amount"
@@ -122,10 +122,10 @@ export default function DonatePage() {
           </button>
 
           <p className="text-center text-xs text-gray-400">
-            Serás redirigido a la plataforma de pago para completar la donación.
+            Sers redirigido a la plataforma de pago para completar la donacin.
           </p>
         </form>
       </section>
     </main>
   );
-}
+}
