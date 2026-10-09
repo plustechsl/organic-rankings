@@ -38,6 +38,8 @@ def search(
                         "description",
                         "list_title^2",
                     ],
+                    "fuzziness": "AUTO",
+                    "prefix_length": 1,
                 }
             }
         )
