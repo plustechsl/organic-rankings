@@ -22,6 +22,7 @@ from app.tags import router as tags_router
 from app.expertise import router as expertise_router
 from app.votes import router as votes_router
 from app.reputation import router as reputation_router
+from app.users import router as users_router
 from app.admin_seed import router as admin_seed_router
 
 from app.opensearch_client import ensure_links_index
@@ -58,6 +59,7 @@ app.include_router(tags_router)
 app.include_router(expertise_router)
 app.include_router(votes_router)
 app.include_router(reputation_router)
+app.include_router(users_router)
 app.include_router(admin_seed_router)
 
 

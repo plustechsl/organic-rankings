@@ -52,6 +52,12 @@ export default function Navbar() {
     return (
       <div className="flex items-center gap-4 text-sm">
         <Link
+          href="/users"
+          className="text-gray-600 transition hover:text-gray-900"
+        >
+          Usuarios
+        </Link>
+        <Link
           href="/donate"
           className="rounded-full bg-gray-900 px-4 py-2 font-medium text-white transition hover:bg-gray-700"
         >
@@ -72,6 +78,12 @@ export default function Navbar() {
 
   return (
     <div className="flex items-center gap-4 text-sm">
+      <Link
+        href="/users"
+        className="text-gray-600 transition hover:text-gray-900"
+      >
+        Usuarios
+      </Link>
       <Link
         href="/donate"
         className="rounded-full bg-gray-900 px-4 py-2 font-medium text-white transition hover:bg-gray-700"
