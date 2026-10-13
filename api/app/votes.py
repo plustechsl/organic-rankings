@@ -3,13 +3,15 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.dependencies import get_current_user, get_current_user_optional
+from app.dependencies import get_current_user
 from app.models.link import Link
 from app.models.list import LinkList
 from app.models.user import User
 from app.models.user_expertise import UserExpertise
 from app.models.vote import Vote
+from app.net import get_client_ip
 from app.opensearch_client import index_link_document
+from app.ratelimit import limit_vote
 from app.utils import hash_ip
 
 
@@ -17,30 +19,19 @@ router = APIRouter(
     tags=["Votes"],
 )
 
-ANONYMOUS_POINTS = 1
 REGISTERED_POINTS = 1
 EXPERTISE_MATCH_POINTS = 3
-
-
-def get_client_ip(request: Request) -> str:
-    forwarded = request.headers.get("x-forwarded-for")
-
-    if forwarded:
-        return forwarded.split(",")[0].strip()
-
-    if request.client:
-        return request.client.host
-
-    return "unknown"
 
 
 @router.post("/links/{link_id}/vote", status_code=201)
 def vote_link(
     link_id: int,
     request: Request,
-    current_user: User | None = Depends(get_current_user_optional),
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
+    limit_vote(request, current_user.id)
+
     link = db.scalar(
         select(Link).where(Link.id == link_id)
     )
@@ -58,21 +49,12 @@ def vote_link(
     ip = get_client_ip(request)
     ip_hash = hash_ip(ip)
 
-    if current_user is not None:
-        existing = db.scalar(
-            select(Vote).where(
-                Vote.link_id == link_id,
-                Vote.user_id == current_user.id,
-            )
+    existing = db.scalar(
+        select(Vote).where(
+            Vote.link_id == link_id,
+            Vote.user_id == current_user.id,
         )
-    else:
-        existing = db.scalar(
-            select(Vote).where(
-                Vote.link_id == link_id,
-                Vote.user_id.is_(None),
-                Vote.ip_hash == ip_hash,
-            )
-        )
+    )
 
     if existing:
         raise HTTPException(
@@ -80,35 +62,32 @@ def vote_link(
             detail="You have already voted for this link",
         )
 
-    points = ANONYMOUS_POINTS
+    points = REGISTERED_POINTS
 
-    if current_user is not None:
-        points = REGISTERED_POINTS
+    expertise_category_ids = {
+        e.category_id
+        for e in db.scalars(
+            select(UserExpertise).where(
+                UserExpertise.user_id == current_user.id
+            )
+        ).all()
+    }
 
-        expertise_category_ids = {
-            e.category_id
-            for e in db.scalars(
-                select(UserExpertise).where(
-                    UserExpertise.user_id == current_user.id
-                )
-            ).all()
+    list_category_ids = set()
+
+    if link_list:
+        list_category_ids = {
+            cid
+            for cid in (link_list.category_id, link_list.subcategory_id)
+            if cid is not None
         }
 
-        list_category_ids = set()
-
-        if link_list:
-            list_category_ids = {
-                cid
-                for cid in (link_list.category_id, link_list.subcategory_id)
-                if cid is not None
-            }
-
-        if expertise_category_ids & list_category_ids:
-            points = EXPERTISE_MATCH_POINTS
+    if expertise_category_ids & list_category_ids:
+        points = EXPERTISE_MATCH_POINTS
 
     vote = Vote(
         link_id=link_id,
-        user_id=current_user.id if current_user else None,
+        user_id=current_user.id,
         ip_hash=ip_hash,
         points=points,
     )

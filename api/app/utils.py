@@ -4,7 +4,9 @@ import re
 import unicodedata
 
 
-IP_HASH_SALT = os.getenv("IP_HASH_SALT", "CHANGE_THIS_SALT_IN_PRODUCTION")
+IP_HASH_SALT_DEFAULT = "CHANGE_THIS_SALT_IN_PRODUCTION"
+
+IP_HASH_SALT = os.getenv("IP_HASH_SALT", IP_HASH_SALT_DEFAULT)
 
 
 def slugify(text: str) -> str:

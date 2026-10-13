@@ -5,8 +5,13 @@ import { FormEvent, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { api, setToken, ApiRequestError } from "@/app/lib/api";
 import { Category } from "@/app/lib/types";
+import Turnstile from "@/app/components/Turnstile";
 
-type LoginResponse = {
+type RegisterResponse = {
+  id: number;
+  username: string;
+  email: string;
+  role: string;
   access_token: string;
   token_type: string;
 };
@@ -21,8 +26,11 @@ export default function RegisterPage() {
   const [password, setPassword] = useState("");
   const [categories, setCategories] = useState<Category[]>([]);
   const [selectedCategoryIds, setSelectedCategoryIds] = useState<number[]>([]);
+  const [turnstileToken, setTurnstileToken] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+
+  const turnstileSiteKey = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY;
 
   useEffect(() => {
     api
@@ -49,14 +57,14 @@ export default function RegisterPage() {
     setLoading(true);
 
     try {
-      await api.post("/auth/register", { username, email, password });
-
-      const loginData = await api.post<LoginResponse>("/auth/login", {
+      const registerData = await api.post<RegisterResponse>("/auth/register", {
         username,
+        email,
         password,
+        turnstile_token: turnstileToken,
       });
 
-      setToken(loginData.access_token);
+      setToken(registerData.access_token);
 
       for (const categoryId of selectedCategoryIds) {
         try {
@@ -175,6 +183,10 @@ export default function RegisterPage() {
             )}
           </div>
 
+          {turnstileSiteKey && (
+            <Turnstile siteKey={turnstileSiteKey} onToken={setTurnstileToken} />
+          )}
+
           {error && (
             <p className="rounded-lg bg-red-50 px-4 py-2 text-sm text-red-700">
               {error}
@@ -183,7 +195,7 @@ export default function RegisterPage() {
 
           <button
             type="submit"
-            disabled={loading}
+            disabled={loading || (!!turnstileSiteKey && !turnstileToken)}
             className="w-full rounded-full bg-gray-900 px-5 py-2.5 text-sm font-medium text-white transition hover:bg-gray-700 disabled:opacity-50"
           >
             {loading ? "Creando cuenta..." : "Crear cuenta"}

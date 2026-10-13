@@ -1,7 +1,16 @@
+import logging
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from app.config import (
+    APP_ENV,
+    JWT_SECRET,
+    JWT_SECRET_DEFAULT,
+    TURNSTILE_SECRET_KEY,
+)
 from app.database import Base, engine
+from app.utils import IP_HASH_SALT, IP_HASH_SALT_DEFAULT
 from app.models.user import User
 from app.models.category import Category
 from app.models.list import LinkList
@@ -27,6 +36,53 @@ from app.admin_seed import router as admin_seed_router
 
 from app.opensearch_client import ensure_links_index
 
+
+logger = logging.getLogger("uvicorn.error")
+
+INSECURE_DEFAULT_SECRETS = {
+    "JWT_SECRET": (JWT_SECRET, JWT_SECRET_DEFAULT),
+    "IP_HASH_SALT": (IP_HASH_SALT, IP_HASH_SALT_DEFAULT),
+}
+
+
+def check_insecure_defaults() -> None:
+    insecure = [
+        name
+        for name, (value, default) in INSECURE_DEFAULT_SECRETS.items()
+        if not value or value == default
+    ]
+
+    if not insecure:
+        return
+
+    if APP_ENV == "production":
+        raise RuntimeError(
+            "Insecure default secrets in production: " + ", ".join(insecure)
+        )
+
+    logger.warning(
+        "Using insecure default secrets (%s); set them before production.",
+        ", ".join(insecure),
+    )
+
+
+def check_production_requirements() -> None:
+    if APP_ENV != "production":
+        return
+
+    missing = []
+
+    if not TURNSTILE_SECRET_KEY:
+        missing.append("TURNSTILE_SECRET_KEY")
+
+    if missing:
+        raise RuntimeError(
+            "Missing required production configuration: " + ", ".join(missing)
+        )
+
+
+check_insecure_defaults()
+check_production_requirements()
 
 Base.metadata.create_all(bind=engine)
 

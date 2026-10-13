@@ -5,11 +5,13 @@ class RegisterRequest(BaseModel):
     username: str
     email: EmailStr
     password: str
+    turnstile_token: str | None = None
 
 
 class LoginRequest(BaseModel):
     username: str
     password: str
+    turnstile_token: str | None = None
 
 
 class ProfileUpdate(BaseModel):

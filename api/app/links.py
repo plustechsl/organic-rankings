@@ -1,9 +1,10 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.dependencies import get_current_user
+from app.ratelimit import limit_creation
 from app.models.link import Link
 from app.models.list import LinkList
 from app.models.user import User
@@ -80,9 +81,12 @@ def get_link(
 @router.post("", status_code=201)
 def create_link(
     payload: LinkCreate,
+    request: Request,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
+    limit_creation(request, current_user.id)
+
     link_list = db.scalar(
         select(LinkList).where(LinkList.id == payload.list_id)
     )

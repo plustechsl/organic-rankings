@@ -4,6 +4,7 @@ import Link from "next/link";
 import { FormEvent, useState } from "react";
 import { useRouter } from "next/navigation";
 import { api, setToken, ApiRequestError } from "@/app/lib/api";
+import Turnstile from "@/app/components/Turnstile";
 
 type LoginResponse = {
   access_token: string;
@@ -15,8 +16,11 @@ export default function LoginPage() {
 
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
+  const [turnstileToken, setTurnstileToken] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+
+  const turnstileSiteKey = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY;
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -27,6 +31,7 @@ export default function LoginPage() {
       const data = await api.post<LoginResponse>("/auth/login", {
         username,
         password,
+        turnstile_token: turnstileToken,
       });
 
       setToken(data.access_token);
@@ -91,6 +96,10 @@ export default function LoginPage() {
             />
           </div>
 
+          {turnstileSiteKey && (
+            <Turnstile siteKey={turnstileSiteKey} onToken={setTurnstileToken} />
+          )}
+
           {error && (
             <p className="rounded-lg bg-red-50 px-4 py-2 text-sm text-red-700">
               {error}
@@ -99,7 +108,7 @@ export default function LoginPage() {
 
           <button
             type="submit"
-            disabled={loading}
+            disabled={loading || (!!turnstileSiteKey && !turnstileToken)}
             className="w-full rounded-full bg-gray-900 px-5 py-2.5 text-sm font-medium text-white transition hover:bg-gray-700 disabled:opacity-50"
           >
             {loading ? "Entrando..." : "Entrar"}
