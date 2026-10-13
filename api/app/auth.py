@@ -1,10 +1,17 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.dependencies import get_current_user
 from app.models.user import User
+from app.ratelimit import (
+    clear_login_failures,
+    limit_login,
+    limit_register,
+    login_locked_retry_after,
+    register_login_failure,
+)
 from app.schemas.auth import (
     ChangePasswordRequest,
     LoginRequest,
@@ -12,6 +19,7 @@ from app.schemas.auth import (
     RegisterRequest,
 )
 from app.security import hash_password, verify_password, create_access_token
+from app.turnstile import verify_turnstile
 
 
 router = APIRouter(
@@ -23,8 +31,12 @@ router = APIRouter(
 @router.post("/register")
 def register(
     data: RegisterRequest,
+    request: Request,
     db: Session = Depends(get_db),
 ):
+    limit_register(request)
+    verify_turnstile(data.turnstile_token, request)
+
     existing_user = db.scalar(
         select(User).where(
             (User.username == data.username)
@@ -54,14 +66,30 @@ def register(
         "username": user.username,
         "email": user.email,
         "role": user.role,
+        "access_token": create_access_token(user.id),
+        "token_type": "bearer",
     }
 
 
 @router.post("/login")
 def login(
     data: LoginRequest,
+    request: Request,
     db: Session = Depends(get_db),
 ):
+    limit_login(request)
+
+    locked_for = login_locked_retry_after(data.username)
+
+    if locked_for is not None:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="Too many failed attempts. Please try again later.",
+            headers={"Retry-After": str(locked_for)},
+        )
+
+    verify_turnstile(data.turnstile_token, request)
+
     user = db.scalar(
         select(User).where(
             User.username == data.username
@@ -72,6 +100,7 @@ def login(
         data.password,
         user.password_hash,
     ):
+        register_login_failure(data.username)
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid username or password",
@@ -82,6 +111,8 @@ def login(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="User account is inactive",
         )
+
+    clear_login_failures(data.username)
 
     token = create_access_token(user.id)
 

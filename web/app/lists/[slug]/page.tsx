@@ -118,6 +118,11 @@ export default function ListDetailPage() {
   }
 
   async function handleVote(linkId: number) {
+    if (!currentUser) {
+      router.push("/login");
+      return;
+    }
+
     setVoteMessage(null);
 
     const alreadyVoted = myVotedLinkIds.has(linkId);
@@ -501,7 +506,9 @@ export default function ListDetailPage() {
                       <button
                         onClick={() => handleVote(link.id)}
                         title={
-                          myVotedLinkIds.has(link.id)
+                          !currentUser
+                            ? "Inicia sesión para votar"
+                            : myVotedLinkIds.has(link.id)
                             ? "Quitar tu voto"
                             : "Votar este enlace"
                         }

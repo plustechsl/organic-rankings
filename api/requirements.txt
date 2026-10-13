@@ -7,3 +7,4 @@ PyJWT
 email-validator
 opensearch-py
 ddgs
+redis

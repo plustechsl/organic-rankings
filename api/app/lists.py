@@ -1,9 +1,10 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy import select
 from sqlalchemy.orm import Session, joinedload, selectinload
 
 from app.database import get_db
 from app.dependencies import get_current_user
+from app.ratelimit import limit_creation
 from app.models.category import Category
 from app.models.list import LinkList
 from app.models.user import User
@@ -130,9 +131,12 @@ def get_list(
 @router.post("", status_code=201)
 def create_list(
     payload: ListCreate,
+    request: Request,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
+    limit_creation(request, current_user.id)
+
     validate_category_and_subcategory(
         payload.category_id,
         payload.subcategory_id,
