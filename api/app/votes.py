@@ -117,9 +117,6 @@ def vote_link(
 
     link.points += points
 
-    if link_list:
-        link_list.points += points
-
     db.commit()
     db.refresh(link)
 
@@ -161,14 +158,7 @@ def remove_vote(
             detail="You have not voted for this link",
         )
 
-    link_list = db.scalar(
-        select(LinkList).where(LinkList.id == link.list_id)
-    )
-
     link.points -= vote.points
-
-    if link_list:
-        link_list.points -= vote.points
 
     db.delete(vote)
     db.commit()
