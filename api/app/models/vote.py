@@ -1,7 +1,7 @@
 from datetime import datetime
 
 from sqlalchemy import DateTime, ForeignKey, Index, Integer, String, text
-from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy.orm import Mapped, mapped_column, relationship, backref
 
 from app.database import Base
 
@@ -57,7 +57,11 @@ class Vote(Base):
 
     link = relationship(
         "Link",
-        backref="votes",
+        backref=backref(
+            "votes",
+            cascade="all, delete-orphan",
+            passive_deletes=True,
+        ),
     )
 
     user = relationship(

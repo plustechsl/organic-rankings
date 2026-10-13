@@ -1,9 +1,10 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import func, select
-from sqlalchemy.orm import Session, joinedload
+from sqlalchemy.orm import Session, joinedload, selectinload
 
 from app.database import get_db
 from app.lists import serialize_list
+from app.models.link import Link
 from app.models.list import LinkList
 from app.models.user import User
 
@@ -16,9 +17,9 @@ router = APIRouter(
 
 def get_user_aura(user_id: int, db: Session) -> int:
     aura = db.scalar(
-        select(func.coalesce(func.sum(LinkList.points), 0)).where(
-            LinkList.user_id == user_id
-        )
+        select(func.coalesce(func.sum(Link.points), 0))
+        .join(LinkList, Link.list_id == LinkList.id)
+        .where(LinkList.user_id == user_id)
     )
 
     return int(aura or 0)
@@ -31,13 +32,14 @@ def list_users(
     rows = db.execute(
         select(
             User,
-            func.coalesce(func.sum(LinkList.points), 0).label("aura"),
+            func.coalesce(func.sum(Link.points), 0).label("aura"),
         )
         .outerjoin(LinkList, LinkList.user_id == User.id)
+        .outerjoin(Link, Link.list_id == LinkList.id)
         .where(User.is_active.is_(True))
         .group_by(User.id)
         .order_by(
-            func.coalesce(func.sum(LinkList.points), 0).desc(),
+            func.coalesce(func.sum(Link.points), 0).desc(),
             User.username,
         )
     ).all()
@@ -70,13 +72,18 @@ def get_user(
 
     lists = db.scalars(
         select(LinkList)
-        .options(joinedload(LinkList.user))
+        .options(joinedload(LinkList.user), selectinload(LinkList.links))
         .where(LinkList.user_id == user_id)
-        .order_by(
-            LinkList.points.desc(),
-            LinkList.created_at.desc(),
-        )
     ).all()
+
+    lists = sorted(
+        lists,
+        key=lambda link_list: (
+            sum(link.points for link in link_list.links),
+            link_list.created_at,
+        ),
+        reverse=True,
+    )
 
     return {
         "id": user.id,
