@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 
 from app.database import get_db
 from app.dependencies import get_current_user
@@ -21,6 +21,7 @@ def serialize_list(link_list: LinkList) -> dict:
     return {
         "id": link_list.id,
         "user_id": link_list.user_id,
+        "username": link_list.user.username if link_list.user else None,
         "title": link_list.title,
         "slug": link_list.slug,
         "description": link_list.description,
@@ -98,7 +99,9 @@ def list_lists(
     db: Session = Depends(get_db),
 ):
     lists = db.scalars(
-        select(LinkList).order_by(LinkList.created_at.desc())
+        select(LinkList)
+        .options(joinedload(LinkList.user))
+        .order_by(LinkList.created_at.desc())
     ).all()
 
     return [serialize_list(link_list) for link_list in lists]
@@ -110,7 +113,9 @@ def get_list(
     db: Session = Depends(get_db),
 ):
     link_list = db.scalar(
-        select(LinkList).where(LinkList.id == list_id)
+        select(LinkList)
+        .options(joinedload(LinkList.user))
+        .where(LinkList.id == list_id)
     )
 
     if not link_list:

@@ -329,6 +329,15 @@ export default function ListDetailPage() {
               <span>
                 {new Date(list.created_at).toLocaleDateString("es-ES")}
               </span>
+              <span>
+                por{" "}
+                <Link
+                  href={`/users/${list.user_id}`}
+                  className="text-blue-700 hover:underline"
+                >
+                  {list.username ?? `usuario #${list.user_id}`}
+                </Link>
+              </span>
             </div>
 
             {showNewLinkForm && (

@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import Navbar from "@/app/components/Navbar";
 import Avatar from "@/app/components/Avatar";
 import { api, getToken, ApiRequestError } from "@/app/lib/api";
-import { LinkList, Category } from "@/app/lib/types";
+import { LinkList, Category, PublicUser } from "@/app/lib/types";
 
 type CurrentUser = {
   id: number;
@@ -22,6 +22,7 @@ export default function ProfilePage() {
   const [myLists, setMyLists] = useState<LinkList[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
+  const [aura, setAura] = useState(0);
 
   const [editingProfile, setEditingProfile] = useState(false);
   const [username, setUsername] = useState("");
@@ -54,6 +55,9 @@ export default function ProfilePage() {
         setUser(me);
         setUsername(me.username);
         setEmail(me.email);
+
+        const publicProfile = await api.get<PublicUser>(`/users/${me.id}`);
+        setAura(publicProfile.aura);
 
         const allLists = await api.get<LinkList[]>("/lists");
         setMyLists(allLists.filter((l) => l.user_id === me.id));
@@ -192,6 +196,27 @@ export default function ProfilePage() {
                 <p className="text-sm text-gray-500">
                   {user.email} · {user.role}
                 </p>
+              </div>
+            </div>
+
+            <div className="mb-8 rounded-lg border border-gray-200 p-5">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h2 className="text-sm font-semibold uppercase tracking-wide text-gray-500">
+                    Aura
+                  </h2>
+                  <p className="mt-2 text-3xl font-semibold">{aura}</p>
+                  <p className="mt-1 text-xs text-gray-400">
+                    Suma de la valoración de los enlaces de tus listas.
+                  </p>
+                </div>
+
+                <Link
+                  href={`/users/${user.id}`}
+                  className="text-sm text-blue-700 hover:underline"
+                >
+                  Ver perfil público
+                </Link>
               </div>
             </div>
 

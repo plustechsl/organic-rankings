@@ -11,6 +11,7 @@ export type Category = {
 export type LinkList = {
   id: number;
   user_id: number;
+  username: string | null;
   title: string;
   slug: string;
   description: string | null;
@@ -20,6 +21,17 @@ export type LinkList = {
   subcategory_id: number | null;
   created_at: string;
   updated_at: string;
+};
+
+export type PublicUser = {
+  id: number;
+  username: string;
+  created_at: string;
+  aura: number;
+};
+
+export type PublicUserProfile = PublicUser & {
+  lists: LinkList[];
 };
 
 export type Link = {
