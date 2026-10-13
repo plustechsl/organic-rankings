@@ -20,28 +20,50 @@ client = OpenSearch(
     verify_certs=False,
 )
 
+LINKS_INDEX_MAPPING_VERSION = 2
+
 LINKS_INDEX_MAPPING = {
     "settings": {
         "analysis": {
+            "filter": {
+                "spanish_stop": {
+                    "type": "stop",
+                    "stopwords": "_spanish_",
+                },
+                "spanish_stemmer": {
+                    "type": "stemmer",
+                    "language": "light_spanish",
+                },
+            },
             "analyzer": {
-                "spanish_analyzer": {
-                    "type": "spanish",
+                "spanish_folding": {
+                    "type": "custom",
+                    "tokenizer": "standard",
+                    "filter": [
+                        "asciifolding",
+                        "lowercase",
+                        "spanish_stop",
+                        "spanish_stemmer",
+                    ],
                 }
             }
         }
     },
     "mappings": {
+        "_meta": {
+            "mapping_version": LINKS_INDEX_MAPPING_VERSION,
+        },
         "properties": {
             "title": {
                 "type": "text",
-                "analyzer": "spanish_analyzer",
+                "analyzer": "spanish_folding",
             },
             "url": {
                 "type": "keyword",
             },
             "description": {
                 "type": "text",
-                "analyzer": "spanish_analyzer",
+                "analyzer": "spanish_folding",
             },
             "points": {
                 "type": "integer",
@@ -54,7 +76,7 @@ LINKS_INDEX_MAPPING = {
             },
             "list_title": {
                 "type": "text",
-                "analyzer": "spanish_analyzer",
+                "analyzer": "spanish_folding",
             },
             "category_id": {
                 "type": "integer",
@@ -92,14 +114,44 @@ def wait_for_opensearch(max_retries: int = 30, delay_seconds: float = 2.0):
     raise RuntimeError("Could not connect to OpenSearch")
 
 
+def _existing_mapping_version():
+    mapping = client.indices.get_mapping(index=LINKS_INDEX)
+
+    return (
+        mapping.get(LINKS_INDEX, {})
+        .get("mappings", {})
+        .get("_meta", {})
+        .get("mapping_version")
+    )
+
+
+def _reindex_all_links():
+    from app.database import SessionLocal
+    from app.reindex_all import reindex_all
+
+    db = SessionLocal()
+    try:
+        total = reindex_all(db)
+        print(f"[opensearch] Índice recreado y reindexado: {total} links.")
+    finally:
+        db.close()
+
+
 def ensure_links_index():
     wait_for_opensearch()
 
-    if not client.indices.exists(index=LINKS_INDEX):
-        client.indices.create(
-            index=LINKS_INDEX,
-            body=LINKS_INDEX_MAPPING,
-        )
+    if client.indices.exists(index=LINKS_INDEX):
+        if _existing_mapping_version() == LINKS_INDEX_MAPPING_VERSION:
+            return
+
+        client.indices.delete(index=LINKS_INDEX)
+
+    client.indices.create(
+        index=LINKS_INDEX,
+        body=LINKS_INDEX_MAPPING,
+    )
+
+    _reindex_all_links()
 
 
 def index_link_document(link):
