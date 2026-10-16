@@ -49,13 +49,14 @@ registro/login), `NEXT_PUBLIC_DONATE_URL` (botón de donar) y `FRONTEND_PORT`.
 ## Desarrollo
 
 ```bash
-docker compose up -d
+docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d
 ```
 
-Con el `docker-compose.override.yml` que ya viene en el repo, `docker compose up`
-arranca la API con recarga en caliente (`--reload`, con el código montado desde
-`./api/app`), ejecuta el frontend con `npm run dev` y publica el puerto 8000 para
-depurar contra la API directamente. No hace falta hacer nada extra.
+El `docker-compose.dev.yml` **no se carga solo** (para que un `docker compose up`
+en un servidor arranque en producción): hay que pasarlo con `-f`, como arriba.
+Con él, la API arranca con recarga en caliente (`--reload`, con el código montado
+desde `./api/app`), el frontend con `npm run dev` y se publica el puerto 8000 para
+depurar contra la API directamente.
 
 Si prefieres correr el frontend fuera de Docker (`cd web && npm run dev`), la
 API sigue necesitaria levantada; apunta a ella con `API_PROXY_TARGET` (por
@@ -84,7 +85,7 @@ variables de entorno del navegador, ni CORS, ni índices externos.
 
 ### Unraid
 
-Misimo procedimiento en `/mnt/user/Projects/organic-rankings` (o donde quieras).
+Mismo procedimiento en `/mnt/user/Projects/organic-rankings` (o donde quieras).
 Publica solo el puerto de `FRONTEND_PORT` (3000) y ya está accesible. Los datos
 viven en los volúmenes de Docker (`postgres_data`, `redis_data`).
 

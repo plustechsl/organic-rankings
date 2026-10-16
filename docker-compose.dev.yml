@@ -1,0 +1,25 @@
+# Override de DESARROLLO. NO se carga solo: hay que incluirlo explícitamente,
+# junto al compose base:
+#   docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d
+# (así un `docker compose up` pelado en un servidor arranca en producción).
+# Añade: recarga en caliente de la API y `npm run dev` del frontend, con el
+# puerto 8000 publicado para depurar contra la API directamente.
+
+services:
+
+  api:
+    volumes:
+      - ./api/app:/app/app
+    ports:
+      - "8000:8000"
+    command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
+
+  frontend:
+    build:
+      context: ./web
+      target: builder
+    command: ["npm", "run", "dev"]
+    volumes:
+      - ./web:/app
+      - /app/node_modules
+      - /app/.next
