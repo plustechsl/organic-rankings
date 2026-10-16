@@ -1,7 +1,6 @@
 import logging
 
 from fastapi import FastAPI
-from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import (
     APP_ENV,
@@ -23,7 +22,7 @@ from app.models.user_reputation import UserReputation
 
 from app.auth import router as auth_router
 from app.admin import router as admin_router
-from app.search import router as search_router
+from app.search import ensure_search_ready, router as search_router
 from app.categories import router as categories_router
 from app.lists import router as lists_router
 from app.links import router as links_router
@@ -33,8 +32,6 @@ from app.votes import router as votes_router
 from app.reputation import router as reputation_router
 from app.users import router as users_router
 from app.admin_seed import router as admin_seed_router
-
-from app.opensearch_client import ensure_links_index
 
 
 logger = logging.getLogger("uvicorn.error")
@@ -86,22 +83,13 @@ check_production_requirements()
 
 Base.metadata.create_all(bind=engine)
 
-ensure_links_index()
+ensure_search_ready()
 
 
 app = FastAPI(
     title="Organic Rankings API",
     description="API del buscador Organic Rankings",
     version="0.1.0",
-)
-
-
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["http://localhost:3000"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
 )
 
 

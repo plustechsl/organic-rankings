@@ -41,8 +41,15 @@ export default function Home() {
               Organic Rankings
             </h1>
 
-            <p className="mb-10 text-base text-gray-500 sm:text-lg">
+            <p className="mb-4 text-base text-gray-500 sm:text-lg">
               Donde el ranking lo decide la gente, no un algoritmo opaco.
+            </p>
+
+            <p className="mx-auto mb-10 max-w-2xl text-sm leading-6 text-gray-500">
+              Organic Rankings es una plataforma abierta de listas de recursos web
+              ordenadas por personas. La puntuación de cada recurso la decide la
+              comunidad: no un algoritmo opaco, ni técnicas de SEO, ni quien más
+              paga.
             </p>
 
             <form
@@ -71,7 +78,10 @@ export default function Home() {
         </section>
 
         <footer className="border-t border-gray-100 px-6 py-5 text-center text-xs text-gray-400">
-          Organic Rankings · Puntuado por humanos
+          Organic Rankings · Puntuado por humanos ·{" "}
+          <Link href="/about" className="hover:text-gray-600 hover:underline">
+            Sobre el proyecto
+          </Link>
         </footer>
       </div>
     </main>
