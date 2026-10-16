@@ -12,6 +12,11 @@ FROM node:22-alpine AS builder
 
 WORKDIR /app
 
+# El rewrite /api lo fija Next en el build (output standalone no lo relee en
+# runtime). El destino por defecto dentro de Docker es el nombre del servicio.
+ARG API_PROXY_TARGET=http://api:8000
+ENV API_PROXY_TARGET=$API_PROXY_TARGET
+
 ARG NEXT_PUBLIC_TURNSTILE_SITE_KEY
 ENV NEXT_PUBLIC_TURNSTILE_SITE_KEY=$NEXT_PUBLIC_TURNSTILE_SITE_KEY
 

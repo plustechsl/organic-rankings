@@ -2,7 +2,7 @@ services:
 
   postgres:
     image: postgres:17
-    container_name: organic_rankings_postgres
+
     environment:
       POSTGRES_DB: ${POSTGRES_DB}
       POSTGRES_USER: ${POSTGRES_USER}
@@ -20,7 +20,7 @@ services:
 
   redis:
     image: redis:7-alpine
-    container_name: organic_rankings_redis
+
     volumes:
       - redis_data:/data
     restart: unless-stopped
@@ -34,7 +34,7 @@ services:
   api:
     build:
       context: ./api
-    container_name: organic_rankings_api
+
     environment:
       APP_ENV: ${APP_ENV:-production}
 
@@ -72,9 +72,10 @@ services:
     build:
       context: ./web
       args:
+        API_PROXY_TARGET: ${API_PROXY_TARGET:-http://api:8000}
         NEXT_PUBLIC_TURNSTILE_SITE_KEY: ${NEXT_PUBLIC_TURNSTILE_SITE_KEY:-}
         NEXT_PUBLIC_DONATE_URL: ${NEXT_PUBLIC_DONATE_URL:-}
-    container_name: organic_rankings_frontend
+
     environment:
       API_PROXY_TARGET: http://api:8000
     ports:
@@ -85,7 +86,9 @@ services:
     restart: unless-stopped
 
     healthcheck:
-      test: [ "CMD", "wget", "-qO-", "http://localhost:3000/" ]
+      # 127.0.0.1 en vez de localhost: dentro del contenedor localhost puede
+      # resolver a ::1 y Next solo escucha en IPv4.
+      test: [ "CMD", "wget", "-qO-", "http://127.0.0.1:3000/" ]
       interval: 10s
       timeout: 5s
       retries: 5

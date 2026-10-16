@@ -48,7 +48,8 @@ def ensure_search_ready() -> None:
             text(
                 "CREATE OR REPLACE FUNCTION f_unaccent(text) RETURNS text "
                 "LANGUAGE sql IMMUTABLE PARALLEL SAFE STRICT "
-                "AS $$ SELECT unaccent('unaccent', $1) $$"
+                "AS $$ SELECT public.unaccent("
+                "'public.unaccent'::regdictionary, $1) $$"
             )
         )
 
