@@ -8,7 +8,6 @@ from app.models.link import Link
 from app.models.link_tag import LinkTag
 from app.models.tag import Tag
 from app.models.user import User
-from app.opensearch_client import index_link_document
 from app.schemas.tag import LinkTagsAttach
 from app.utils import slugify
 
@@ -190,8 +189,6 @@ def attach_tags_to_link(
     db.commit()
     db.refresh(link)
 
-    index_link_document(link)
-
     tags = sorted(
         (relation.tag for relation in link.tag_relations),
         key=lambda tag: tag.name,
@@ -239,8 +236,6 @@ def detach_tag_from_link(
     db.delete(relation)
     db.commit()
     db.refresh(link)
-
-    index_link_document(link)
 
     return {
         "message": "Tag removed from link",

@@ -1,12 +1,73 @@
-from fastapi import APIRouter, Query
+import unicodedata
 
-from app.opensearch_client import LINKS_INDEX, client
+from fastapi import APIRouter, Depends, Query
+from sqlalchemy import func, or_, select, text
+from sqlalchemy.orm import Session, aliased
+
+from app.database import engine, get_db
+from app.models.category import Category
+from app.models.link import Link
+from app.models.link_tag import LinkTag
+from app.models.list import LinkList
+from app.models.tag import Tag
+from app.utils import slugify
+
+
+FUZZY_MIN_WORD_LENGTH = 5
+FUZZY_SIMILARITY_THRESHOLD = 0.4
 
 
 router = APIRouter(
     prefix="/search",
     tags=["Search"],
 )
+
+
+def _normalize(value: str) -> str:
+    value = unicodedata.normalize("NFKD", value.lower())
+    return "".join(
+        char for char in value if not unicodedata.combining(char)
+    )
+
+
+def _haystack():
+    return func.concat_ws(
+        " ",
+        func.f_unaccent(func.lower(Link.title)),
+        func.f_unaccent(func.lower(Link.description)),
+        func.f_unaccent(func.lower(LinkList.title)),
+    )
+
+
+def ensure_search_ready() -> None:
+    with engine.begin() as conn:
+        conn.execute(text("CREATE EXTENSION IF NOT EXISTS unaccent"))
+        conn.execute(text("CREATE EXTENSION IF NOT EXISTS pg_trgm"))
+
+        conn.execute(
+            text(
+                "CREATE OR REPLACE FUNCTION f_unaccent(text) RETURNS text "
+                "LANGUAGE sql IMMUTABLE PARALLEL SAFE STRICT "
+                "AS $$ SELECT unaccent('unaccent', $1) $$"
+            )
+        )
+
+        for column in ("title", "description"):
+            conn.execute(
+                text(
+                    f"CREATE INDEX IF NOT EXISTS ix_links_{column}_trgm "
+                    f"ON links USING gin "
+                    f"(f_unaccent(lower({column})) gin_trgm_ops)"
+                )
+            )
+
+        conn.execute(
+            text(
+                "CREATE INDEX IF NOT EXISTS ix_lists_title_trgm "
+                "ON lists USING gin "
+                "(f_unaccent(lower(title)) gin_trgm_ops)"
+            )
+        )
 
 
 @router.get("")
@@ -24,70 +85,130 @@ def search(
     ),
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=20, ge=1, le=100),
+    db: Session = Depends(get_db),
 ):
-    must_clauses = []
-    filter_clauses = []
+    category_alias = aliased(Category)
+    subcategory_alias = aliased(Category)
+
+    conditions = []
 
     if q:
-        must_clauses.append(
-            {
-                "multi_match": {
-                    "query": q,
-                    "fields": [
-                        "title^3",
-                        "description",
-                        "list_title^2",
-                    ],
-                    "fuzziness": "AUTO",
-                    "prefix_length": 1,
-                }
-            }
-        )
+        haystack = _haystack()
+
+        for raw_word in q.split():
+            word = _normalize(raw_word)
+
+            if not word:
+                continue
+
+            escaped = (
+                word.replace("\\", "\\\\")
+                .replace("%", "\\%")
+                .replace("_", "\\_")
+            )
+
+            condition = haystack.like(f"%{escaped}%", escape="\\")
+
+            if len(word) >= FUZZY_MIN_WORD_LENGTH:
+                condition = or_(
+                    condition,
+                    func.word_similarity(word, haystack)
+                    >= FUZZY_SIMILARITY_THRESHOLD,
+                )
+
+            conditions.append(condition)
 
     if category:
-        filter_clauses.append({"term": {"category_name": category}})
+        normalized = _normalize(category)
+        conditions.append(
+            or_(
+                func.f_unaccent(func.lower(category_alias.name))
+                == normalized,
+                func.f_unaccent(func.lower(subcategory_alias.name))
+                == normalized,
+            )
+        )
 
     if subcategory:
-        filter_clauses.append({"term": {"subcategory_name": subcategory}})
+        normalized = _normalize(subcategory)
+        conditions.append(
+            func.f_unaccent(func.lower(subcategory_alias.name))
+            == normalized
+        )
+
+    base_query = (
+        select(Link, LinkList, category_alias, subcategory_alias)
+        .join(LinkList, Link.list_id == LinkList.id)
+        .join(
+            category_alias,
+            LinkList.category_id == category_alias.id,
+        )
+        .join(
+            subcategory_alias,
+            LinkList.subcategory_id == subcategory_alias.id,
+            isouter=True,
+        )
+        .where(*conditions)
+    )
 
     if tag:
-        filter_clauses.append({"term": {"tags": tag}})
+        base_query = (
+            base_query.join(LinkTag, LinkTag.link_id == Link.id)
+            .join(Tag, LinkTag.tag_id == Tag.id)
+            .where(Tag.slug == slugify(tag))
+        )
 
-    if must_clauses or filter_clauses:
-        query_body = {
-            "bool": {
-                "must": must_clauses,
-                "filter": filter_clauses,
-            }
-        }
+    total = db.scalar(
+        select(func.count()).select_from(base_query.subquery())
+    )
+
+    if sort == "recent":
+        base_query = base_query.order_by(Link.created_at.desc())
     else:
-        query_body = {"match_all": {}}
+        base_query = base_query.order_by(
+            Link.points.desc(),
+            Link.created_at.desc(),
+        )
 
-    sort_body = (
-        [{"points": {"order": "desc"}}]
-        if sort == "points"
-        else [{"created_at": {"order": "desc"}}]
-    )
+    rows = db.execute(
+        base_query.offset((page - 1) * page_size).limit(page_size)
+    ).all()
 
-    response = client.search(
-        index=LINKS_INDEX,
-        body={
-            "query": query_body,
-            "sort": sort_body,
-            "from": (page - 1) * page_size,
-            "size": page_size,
-        },
-    )
+    tags_by_link: dict[int, list[str]] = {}
+    link_ids = [link.id for link, *_ in rows]
 
-    hits = response["hits"]["hits"]
-    total = response["hits"]["total"]["value"]
+    if link_ids:
+        tag_rows = db.execute(
+            select(LinkTag.link_id, Tag.name)
+            .join(Tag, LinkTag.tag_id == Tag.id)
+            .where(LinkTag.link_id.in_(link_ids))
+            .order_by(Tag.name)
+        )
+
+        for link_id, tag_name in tag_rows:
+            tags_by_link.setdefault(link_id, []).append(tag_name)
 
     results = [
         {
-            "id": int(hit["_id"]),
-            **hit["_source"],
+            "id": link.id,
+            "title": link.title,
+            "url": link.url,
+            "description": link.description,
+            "points": link.points,
+            "created_at": link.created_at,
+            "list_id": link_list.id,
+            "list_title": link_list.title,
+            "category_id": category.id if category else None,
+            "category_name": category.name if category else None,
+            "subcategory_id": (
+                subcategory.id if subcategory else None
+            ),
+            "subcategory_name": (
+                subcategory.name if subcategory else None
+            ),
+            "tags": tags_by_link.get(link.id, []),
         }
-        for hit in hits
+        for link, link_list, category, subcategory in rows
     ]
 
     return {

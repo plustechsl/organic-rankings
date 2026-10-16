@@ -12,7 +12,6 @@ from app.models.category import Category
 from app.models.link import Link
 from app.models.link_tag import LinkTag
 from app.models.list import LinkList
-from app.opensearch_client import index_link_document
 from app.models.tag import Tag
 from app.models.user import User
 from app.utils import slugify
@@ -237,10 +236,6 @@ def seed_list(
 
     db.commit()
     db.refresh(new_list)
-
-    for link in created_links:
-        db.refresh(link)
-        index_link_document(link)
 
     return {
         "id": new_list.id,

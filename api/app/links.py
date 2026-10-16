@@ -8,7 +8,6 @@ from app.ratelimit import limit_creation
 from app.models.link import Link
 from app.models.list import LinkList
 from app.models.user import User
-from app.opensearch_client import delete_link_document, index_link_document
 from app.schemas.link import LinkCreate, LinkUpdate
 
 
@@ -116,8 +115,6 @@ def create_link(
     db.commit()
     db.refresh(link)
 
-    index_link_document(link)
-
     return serialize_link(link)
 
 
@@ -159,8 +156,6 @@ def update_link(
     db.commit()
     db.refresh(link)
 
-    index_link_document(link)
-
     return serialize_link(link)
 
 
@@ -188,8 +183,6 @@ def delete_link(
 
     db.delete(link)
     db.commit()
-
-    delete_link_document(link_id)
 
     return {
         "message": "Link deleted",

@@ -24,15 +24,6 @@ REDIS_HOST = getenv("REDIS_HOST", "redis")
 REDIS_PORT = int(getenv("REDIS_PORT", "6379"))
 
 # =============================================================================
-# OpenSearch
-# =============================================================================
-
-OPENSEARCH_HOST = getenv("OPENSEARCH_HOST", "opensearch")
-OPENSEARCH_PORT = int(getenv("OPENSEARCH_PORT", "9200"))
-
-LINKS_INDEX = getenv("OPENSEARCH_INDEX", "links")
-
-# =============================================================================
 # Entorno
 # =============================================================================
 

@@ -10,7 +10,6 @@ from app.models.user import User
 from app.models.user_expertise import UserExpertise
 from app.models.vote import Vote
 from app.net import get_client_ip
-from app.opensearch_client import index_link_document
 from app.ratelimit import limit_vote
 from app.utils import hash_ip
 
@@ -99,8 +98,6 @@ def vote_link(
     db.commit()
     db.refresh(link)
 
-    index_link_document(link)
-
     return {
         "link_id": link.id,
         "points_awarded": points,
@@ -142,8 +139,6 @@ def remove_vote(
     db.delete(vote)
     db.commit()
     db.refresh(link)
-
-    index_link_document(link)
 
     return {
         "link_id": link.id,

@@ -83,8 +83,8 @@ export default function PrivacyPage() {
             </h2>
             <p>
               Los datos se almacenan en PostgreSQL. Las contraseñas se guardan
-              siempre cifradas. El contenido público se indexa en OpenSearch para
-              que el buscador interno funcione.
+              siempre cifradas. El contenido público se indexa en la propia base
+              de datos para que el buscador interno funcione.
             </p>
           </div>
 
