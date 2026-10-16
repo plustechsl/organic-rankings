@@ -12,8 +12,13 @@ FROM node:22-alpine AS builder
 
 WORKDIR /app
 
-COPY --from=deps /app/node_modules ./node_modules
+ARG NEXT_PUBLIC_TURNSTILE_SITE_KEY
+ENV NEXT_PUBLIC_TURNSTILE_SITE_KEY=$NEXT_PUBLIC_TURNSTILE_SITE_KEY
 
+ARG NEXT_PUBLIC_DONATE_URL
+ENV NEXT_PUBLIC_DONATE_URL=$NEXT_PUBLIC_DONATE_URL
+
+COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 
 RUN npm run build
@@ -24,12 +29,13 @@ FROM node:22-alpine
 WORKDIR /app
 
 ENV NODE_ENV=production
+ENV PORT=3000
+ENV HOSTNAME=0.0.0.0
 
-COPY --from=builder /app/.next ./.next
+COPY --from=builder /app/.next/standalone ./
+COPY --from=builder /app/.next/static ./.next/static
 COPY --from=builder /app/public ./public
-COPY --from=builder /app/package.json .
-COPY --from=builder /app/node_modules ./node_modules
 
 EXPOSE 3000
 
-CMD ["npm","start"]
+CMD ["node", "server.js"]
