@@ -35,7 +35,7 @@ export default function UsersPage() {
       <section className="mx-auto max-w-4xl px-6 py-10">
         <h1 className="mb-2 text-2xl font-semibold">Usuarios</h1>
         <p className="mb-8 text-sm text-gray-500">
-          Ordenados por aura: la valoración de los enlaces de sus listas.
+          Ordenados por aura: la valoración de los enlaces de sus listas más los puntos por invitaciones aprobadas.
         </p>
 
         {loading && <p className="text-sm text-gray-500">Cargando...</p>}

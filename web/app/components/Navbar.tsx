@@ -57,6 +57,14 @@ export default function Navbar() {
         >
           Usuarios
         </Link>
+        {user.role === "admin" && (
+          <Link
+            href="/admin"
+            className="text-gray-600 transition hover:text-gray-900"
+          >
+            Admin
+          </Link>
+        )}
         <Link
           href="/donate"
           className="rounded-full bg-gray-900 px-4 py-2 font-medium text-white transition hover:bg-gray-700"

@@ -89,7 +89,7 @@ export default function PublicProfilePage() {
               </h2>
               <p className="mt-2 text-3xl font-semibold">{profile.aura}</p>
               <p className="mt-1 text-xs text-gray-400">
-                Suma de la valoración de los enlaces de sus listas.
+                Valoración de los enlaces de sus listas más los puntos por invitaciones aprobadas.
               </p>
             </div>
 

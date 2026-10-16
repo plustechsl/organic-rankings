@@ -7,6 +7,7 @@ from app.models.link_tag import LinkTag
 from app.models.user_expertise import UserExpertise
 from app.models.vote import Vote
 from app.models.user_reputation import UserReputation
+from app.models.referral import Invitation, ReferralCode
 
 __all__ = [
     "User",
@@ -18,4 +19,6 @@ __all__ = [
     "UserExpertise",
     "Vote",
     "UserReputation",
+    "Invitation",
+    "ReferralCode",
 ]
