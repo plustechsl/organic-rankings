@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import Navbar from "@/app/components/Navbar";
 import Avatar from "@/app/components/Avatar";
 import { api, getToken, ApiRequestError } from "@/app/lib/api";
-import { LinkList, Category, PublicUser } from "@/app/lib/types";
+import { LinkList, Category, PublicUser, MyReferrals } from "@/app/lib/types";
 
 type CurrentUser = {
   id: number;
@@ -14,6 +14,26 @@ type CurrentUser = {
   email: string;
   role: string;
 };
+
+function statusLabel(status: string): string {
+  if (status === "approved") {
+    return "Aprobada";
+  }
+  if (status === "rejected") {
+    return "Rechazada";
+  }
+  return "Pendiente";
+}
+
+function statusBadgeClass(status: string): string {
+  if (status === "approved") {
+    return "rounded-full bg-green-50 px-2.5 py-1 text-xs text-green-700";
+  }
+  if (status === "rejected") {
+    return "rounded-full bg-red-50 px-2.5 py-1 text-xs text-red-700";
+  }
+  return "rounded-full bg-yellow-50 px-2.5 py-1 text-xs text-yellow-700";
+}
 
 export default function ProfilePage() {
   const router = useRouter();
@@ -23,6 +43,10 @@ export default function ProfilePage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
   const [aura, setAura] = useState(0);
+
+  const [referrals, setReferrals] = useState<MyReferrals | null>(null);
+  const [referralLink, setReferralLink] = useState("");
+  const [copied, setCopied] = useState(false);
 
   const [editingProfile, setEditingProfile] = useState(false);
   const [username, setUsername] = useState("");
@@ -58,6 +82,12 @@ export default function ProfilePage() {
 
         const publicProfile = await api.get<PublicUser>(`/users/${me.id}`);
         setAura(publicProfile.aura);
+
+        const myReferrals = await api.get<MyReferrals>("/me/referrals");
+        setReferrals(myReferrals);
+        setReferralLink(
+          `${window.location.origin}/register?ref=${myReferrals.code}`
+        );
 
         const allLists = await api.get<LinkList[]>("/lists");
         setMyLists(allLists.filter((l) => l.user_id === me.id));
@@ -165,6 +195,17 @@ export default function ProfilePage() {
       setSavingExpertise(false);
     }
   }
+
+  async function handleCopyLink() {
+    try {
+      await navigator.clipboard.writeText(referralLink);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      setCopied(false);
+    }
+  }
+
   return (
     <main className="min-h-screen bg-white text-gray-900">
       <header className="border-b border-gray-200">
@@ -207,7 +248,7 @@ export default function ProfilePage() {
                   </h2>
                   <p className="mt-2 text-3xl font-semibold">{aura}</p>
                   <p className="mt-1 text-xs text-gray-400">
-                    Suma de la valoración de los enlaces de tus listas.
+                    Valoración de los enlaces de tus listas más los puntos por invitaciones aprobadas.
                   </p>
                 </div>
 
@@ -219,6 +260,82 @@ export default function ProfilePage() {
                 </Link>
               </div>
             </div>
+
+            {referrals && (
+              <div className="mb-8 rounded-lg border border-gray-200 p-5">
+                <h2 className="mb-1 text-sm font-semibold uppercase tracking-wide text-gray-500">
+                  Invitaciones
+                </h2>
+                <p className="mb-4 text-xs text-gray-400">
+                  Comparte tu enlace. Cuando alguien se registre con él, un
+                  administrador validará la invitación y ganarás{" "}
+                  {referrals.points_per_invite} puntos.
+                </p>
+
+                <div className="mb-4 flex items-center justify-between gap-3 rounded-lg bg-gray-50 px-4 py-3">
+                  <div className="min-w-0">
+                    <p className="text-xs text-gray-400">Tu enlace</p>
+                    <p className="truncate font-mono text-sm text-gray-900">
+                      {referralLink}
+                    </p>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={handleCopyLink}
+                    className="shrink-0 rounded-full border border-gray-300 px-4 py-2 text-sm text-gray-700 transition hover:bg-white"
+                  >
+                    {copied ? "Copiado" : "Copiar"}
+                  </button>
+                </div>
+
+                <p className="mb-4 text-sm text-gray-600">
+                  Puntos por invitaciones:{" "}
+                  <span className="font-medium text-gray-900">
+                    {referrals.points}
+                  </span>
+                </p>
+
+                {referrals.invited.length === 0 && (
+                  <p className="text-sm text-gray-500">
+                    Todavía no has invitado a nadie.
+                  </p>
+                )}
+
+                {referrals.invited.length > 0 && (
+                  <div className="divide-y divide-gray-100">
+                    {referrals.invited.map((invite) => (
+                      <div
+                        key={invite.id}
+                        className="flex items-center justify-between py-2"
+                      >
+                        <div>
+                          <p className="text-sm font-medium text-gray-900">
+                            {invite.username ?? `Usuario #${invite.user_id}`}
+                          </p>
+                          <p className="text-xs text-gray-400">
+                            {new Date(invite.created_at).toLocaleDateString(
+                              "es-ES"
+                            )}
+                          </p>
+                        </div>
+
+                        <div className="flex items-center gap-3">
+                          <span className={statusBadgeClass(invite.status)}>
+                            {statusLabel(invite.status)}
+                          </span>
+                          <span className="text-sm font-medium text-gray-600">
+                            {invite.status === "approved"
+                              ? `+${invite.points}`
+                              : "—"}
+                          </span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
 
             <div className="mb-8 rounded-lg border border-gray-200 p-5">
               <div className="mb-4 flex items-center justify-between">

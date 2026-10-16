@@ -34,6 +34,37 @@ export type PublicUserProfile = PublicUser & {
   lists: LinkList[];
 };
 
+export type InvitationStatus = "pending" | "approved" | "rejected";
+
+export type ReferralInvite = {
+  id: number;
+  user_id: number;
+  username: string | null;
+  status: InvitationStatus;
+  points: number;
+  created_at: string;
+  reviewed_at: string | null;
+};
+
+export type MyReferrals = {
+  code: string;
+  points: number;
+  points_per_invite: number;
+  invited: ReferralInvite[];
+};
+
+export type AdminInvitation = {
+  id: number;
+  inviter_id: number;
+  inviter_username: string | null;
+  invited_user_id: number;
+  invited_username: string | null;
+  status: InvitationStatus;
+  points: number;
+  created_at: string;
+  reviewed_at: string | null;
+};
+
 export type Link = {
   id: number;
   list_id: number;

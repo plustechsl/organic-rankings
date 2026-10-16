@@ -2,8 +2,10 @@ from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.config import REFERRAL_POINTS
 from app.database import get_db
 from app.dependencies import get_current_user
+from app.models.referral import Invitation, ReferralCode
 from app.models.user import User
 from app.ratelimit import (
     clear_login_failures,
@@ -50,6 +52,21 @@ def register(
             detail="Username or email already exists",
         )
 
+    referral_code = None
+
+    if data.referral_code:
+        referral_code = db.scalar(
+            select(ReferralCode).where(
+                ReferralCode.code == data.referral_code
+            )
+        )
+
+        if not referral_code:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Invalid referral code",
+            )
+
     user = User(
         username=data.username,
         email=data.email,
@@ -58,6 +75,18 @@ def register(
     )
 
     db.add(user)
+    db.flush()
+
+    if referral_code and referral_code.user_id != user.id:
+        db.add(
+            Invitation(
+                inviter_id=referral_code.user_id,
+                invited_user_id=user.id,
+                status="pending",
+                points=REFERRAL_POINTS,
+            )
+        )
+
     db.commit()
     db.refresh(user)
 

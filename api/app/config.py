@@ -64,6 +64,18 @@ CREATION_RATE_LIMIT = int(getenv("CREATION_RATE_LIMIT", "20"))
 CREATION_RATE_WINDOW = int(getenv("CREATION_RATE_WINDOW", "3600"))
 
 # =============================================================================
+# Invitaciones
+# =============================================================================
+
+REFERRAL_POINTS = int(getenv("REFERRAL_POINTS", "3"))
+
+REFERRAL_TO_AURA = getenv("REFERRAL_TO_AURA", "true").lower() in {
+    "1",
+    "true",
+    "yes",
+}
+
+# =============================================================================
 # Cloudflare Turnstile (captcha)
 # =============================================================================
 

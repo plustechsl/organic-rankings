@@ -24,6 +24,7 @@ export default function RegisterPage() {
   const [username, setUsername] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [referralCode, setReferralCode] = useState("");
   const [categories, setCategories] = useState<Category[]>([]);
   const [selectedCategoryIds, setSelectedCategoryIds] = useState<number[]>([]);
   const [turnstileToken, setTurnstileToken] = useState<string | null>(null);
@@ -31,6 +32,14 @@ export default function RegisterPage() {
   const [loading, setLoading] = useState(false);
 
   const turnstileSiteKey = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY;
+
+  useEffect(() => {
+    const ref = new URLSearchParams(window.location.search).get("ref");
+
+    if (ref) {
+      setReferralCode(ref);
+    }
+  }, []);
 
   useEffect(() => {
     api
@@ -62,6 +71,7 @@ export default function RegisterPage() {
         email,
         password,
         turnstile_token: turnstileToken,
+        referral_code: referralCode.trim() || undefined,
       });
 
       setToken(registerData.access_token);
@@ -140,6 +150,20 @@ export default function RegisterPage() {
               onChange={(e) => setPassword(e.target.value)}
               required
               minLength={8}
+              className="w-full rounded-lg border border-gray-300 px-4 py-2.5 outline-none focus:border-gray-500"
+            />
+          </div>
+
+          <div>
+            <label htmlFor="referral" className="mb-1 block text-sm text-gray-600">
+              Código de invitación (opcional)
+            </label>
+            <input
+              id="referral"
+              type="text"
+              value={referralCode}
+              onChange={(e) => setReferralCode(e.target.value)}
+              placeholder="Te lo dio quien te invitó"
               className="w-full rounded-lg border border-gray-300 px-4 py-2.5 outline-none focus:border-gray-500"
             />
           </div>
