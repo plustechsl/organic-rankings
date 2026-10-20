@@ -1,11 +1,11 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { FormEvent, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Navbar from "@/app/components/Navbar";
 import { api, getToken, ApiRequestError } from "@/app/lib/api";
-import { AdminInvitation } from "@/app/lib/types";
+import { AdminInvitation, Category } from "@/app/lib/types";
 
 type CurrentUser = {
   id: number;
@@ -36,6 +36,43 @@ function statusBadgeClass(status: string): string {
   return "rounded-full bg-yellow-50 px-2.5 py-1 text-xs text-yellow-700";
 }
 
+function CategoryRow({
+  category,
+  nested,
+  deleting,
+  onDelete,
+}: {
+  category: Category;
+  nested: boolean;
+  deleting: boolean;
+  onDelete: (category: Category) => void;
+}) {
+  return (
+    <div
+      className={`flex items-center justify-between px-4 py-3 ${
+        nested ? "bg-gray-50 pl-10" : ""
+      }`}
+    >
+      <div>
+        <p className="text-sm font-medium text-gray-900">{category.name}</p>
+        <p className="text-xs text-gray-400">
+          /{category.slug}
+          {nested ? " · subcategoría" : ""}
+        </p>
+      </div>
+
+      <button
+        type="button"
+        disabled={deleting}
+        onClick={() => onDelete(category)}
+        className="rounded-full border border-red-300 px-4 py-1.5 text-sm text-red-600 transition hover:bg-red-50 disabled:opacity-50"
+      >
+        Eliminar
+      </button>
+    </div>
+  );
+}
+
 export default function AdminPage() {
   const router = useRouter();
 
@@ -45,6 +82,16 @@ export default function AdminPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [actingId, setActingId] = useState<number | null>(null);
+
+  const [categories, setCategories] = useState<Category[]>([]);
+  const [categoryName, setCategoryName] = useState("");
+  const [categoryParent, setCategoryParent] = useState("");
+  const [savingCategory, setSavingCategory] = useState(false);
+  const [deletingCategoryId, setDeletingCategoryId] = useState<number | null>(
+    null
+  );
+  const [categoryError, setCategoryError] = useState<string | null>(null);
+  const [categoryNotice, setCategoryNotice] = useState<string | null>(null);
 
   useEffect(() => {
     if (!getToken()) {
@@ -129,6 +176,87 @@ export default function AdminPage() {
     }
   }
 
+  useEffect(() => {
+    if (allowed !== true) {
+      return;
+    }
+
+    loadCategories();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [allowed]);
+
+  async function loadCategories() {
+    try {
+      const data = await api.get<Category[]>("/categories");
+      setCategories(data);
+    } catch {
+      setCategoryError("No se pudieron cargar las categorías.");
+    }
+  }
+
+  async function handleCreateCategory(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setCategoryError(null);
+    setCategoryNotice(null);
+
+    const name = categoryName.trim();
+
+    if (!name) {
+      setCategoryError("Escribe un nombre para la categoría.");
+      return;
+    }
+
+    setSavingCategory(true);
+
+    try {
+      const created = await api.post<Category>("/categories", {
+        name,
+        parent_id: categoryParent ? Number(categoryParent) : null,
+      });
+
+      setCategoryName("");
+      setCategoryParent("");
+      setCategoryNotice(`Categoría «${created.name}» creada.`);
+      await loadCategories();
+    } catch (err) {
+      if (err instanceof ApiRequestError) {
+        setCategoryError(err.message);
+      } else {
+        setCategoryError("No se pudo crear la categoría.");
+      }
+    } finally {
+      setSavingCategory(false);
+    }
+  }
+
+  async function handleDeleteCategory(category: Category) {
+    const confirmText = category.parent_id
+      ? `¿Eliminar la subcategoría «${category.name}»?\n\nLas listas que la usen se quedarán sin ella.`
+      : `¿Eliminar la categoría «${category.name}»?\n\nLas listas que la usen pasarán a «Cat varios».`;
+
+    if (!window.confirm(confirmText)) {
+      return;
+    }
+
+    setCategoryError(null);
+    setCategoryNotice(null);
+    setDeletingCategoryId(category.id);
+
+    try {
+      await api.delete(`/categories/${category.id}`);
+      setCategoryNotice(`Categoría «${category.name}» eliminada.`);
+      await loadCategories();
+    } catch (err) {
+      if (err instanceof ApiRequestError) {
+        setCategoryError(err.message);
+      } else {
+        setCategoryError("No se pudo eliminar la categoría.");
+      }
+    } finally {
+      setDeletingCategoryId(null);
+    }
+  }
+
   return (
     <main className="min-h-screen bg-white text-gray-900">
       <header className="border-b border-gray-200">
@@ -144,7 +272,8 @@ export default function AdminPage() {
       <section className="mx-auto max-w-4xl px-6 py-10">
         <h1 className="mb-2 text-2xl font-semibold">Administración</h1>
         <p className="mb-8 text-sm text-gray-500">
-          Valida las invitaciones para conceder los puntos al usuario que invitó.
+          Valida las invitaciones para conceder los puntos al usuario que
+          invitó y administra las categorías del sitio.
         </p>
 
         {allowed === null && (
@@ -253,6 +382,108 @@ export default function AdminPage() {
                         </>
                       )}
                     </div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            <h2 className="mb-1 mt-12 text-lg font-semibold">Categorías</h2>
+            <p className="mb-4 text-sm text-gray-500">
+              Crea categorías para el sitio y elimina las que ya no quieras. Al
+              borrar una categoría principal, sus listas pasan a «Cat varios»;
+              al borrar una subcategoría, las listas se quedan sin ella.
+            </p>
+
+            {categoryError && (
+              <p className="mb-4 rounded-lg bg-red-50 px-4 py-2 text-sm text-red-700">
+                {categoryError}
+              </p>
+            )}
+
+            {categoryNotice && (
+              <p className="mb-4 rounded-lg bg-green-50 px-4 py-2 text-sm text-green-700">
+                {categoryNotice}
+              </p>
+            )}
+
+            <form
+              onSubmit={handleCreateCategory}
+              className="mb-6 flex flex-wrap items-end gap-3"
+            >
+              <div className="min-w-[200px] flex-1">
+                <label
+                  htmlFor="category-name"
+                  className="mb-1 block text-sm text-gray-600"
+                >
+                  Nombre
+                </label>
+                <input
+                  id="category-name"
+                  type="text"
+                  value={categoryName}
+                  onChange={(event) => setCategoryName(event.target.value)}
+                  placeholder="Ej. Herramientas IA"
+                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-gray-500 focus:outline-none"
+                />
+              </div>
+
+              <div className="min-w-[220px]">
+                <label
+                  htmlFor="category-parent"
+                  className="mb-1 block text-sm text-gray-600"
+                >
+                  Categoría principal (opcional)
+                </label>
+                <select
+                  id="category-parent"
+                  value={categoryParent}
+                  onChange={(event) => setCategoryParent(event.target.value)}
+                  className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm focus:border-gray-500 focus:outline-none"
+                >
+                  <option value="">Ninguna (categoría principal)</option>
+                  {categories.map((category) => (
+                    <option key={category.id} value={category.id}>
+                      {category.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <button
+                type="submit"
+                disabled={savingCategory || !categoryName.trim()}
+                className="rounded-full bg-gray-900 px-5 py-2 text-sm font-medium text-white transition hover:bg-gray-700 disabled:opacity-50"
+              >
+                Crear categoría
+              </button>
+            </form>
+
+            {categories.length === 0 && (
+              <p className="text-sm text-gray-500">
+                No hay categorías todavía.
+              </p>
+            )}
+
+            {categories.length > 0 && (
+              <div className="divide-y divide-gray-100 rounded-lg border border-gray-200">
+                {categories.map((category) => (
+                  <div key={category.id}>
+                    <CategoryRow
+                      category={category}
+                      nested={false}
+                      deleting={deletingCategoryId === category.id}
+                      onDelete={handleDeleteCategory}
+                    />
+
+                    {(category.children ?? []).map((child) => (
+                      <CategoryRow
+                        key={child.id}
+                        category={child}
+                        nested={true}
+                        deleting={deletingCategoryId === child.id}
+                        onDelete={handleDeleteCategory}
+                      />
+                    ))}
                   </div>
                 ))}
               </div>
