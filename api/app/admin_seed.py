@@ -3,7 +3,7 @@ import re
 from ddgs import DDGS
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, field_validator
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
 from app.database import get_db
@@ -122,6 +122,33 @@ def find_or_create_category(db: Session, category_name: str) -> Category:
     return category
 
 
+def get_varios_category(db: Session) -> Category:
+    bucket = db.scalar(
+        select(Category).where(
+            or_(
+                Category.name.ilike("Varios"),
+                Category.name.ilike("Cat varios"),
+            )
+        )
+    )
+
+    if bucket:
+        return bucket
+
+    return find_or_create_category(db, "Varios")
+
+
+def resolve_category(db: Session, category_name: str) -> Category:
+    existing = db.scalar(
+        select(Category).where(Category.name.ilike(category_name))
+    )
+
+    if existing:
+        return existing
+
+    return get_varios_category(db)
+
+
 def word_root(word: str) -> str:
     return word[:5]
 
@@ -147,7 +174,7 @@ def guess_category(db: Session, topic: str) -> Category:
     if best_match:
         return best_match
 
-    return find_or_create_category(db, "Varios")
+    return get_varios_category(db)
 
 
 def get_or_create_tag(db: Session, name: str) -> Tag | None:
@@ -182,7 +209,7 @@ def seed_list(
         )
 
     if payload.category_name:
-        category = find_or_create_category(db, payload.category_name)
+        category = resolve_category(db, payload.category_name)
     else:
         category = guess_category(db, payload.topic)
 
