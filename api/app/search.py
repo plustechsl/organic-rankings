@@ -196,6 +196,7 @@ def search(
             "url": link.url,
             "description": link.description,
             "points": link.points,
+            "sensitivity": link.sensitivity,
             "created_at": link.created_at,
             "list_id": link_list.id,
             "list_title": link_list.title,

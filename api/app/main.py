@@ -9,6 +9,7 @@ from app.config import (
     TURNSTILE_SECRET_KEY,
 )
 from app.database import Base, engine
+from app.migrations import ensure_schema_updates
 from app.utils import IP_HASH_SALT, IP_HASH_SALT_DEFAULT
 from app.models.user import User
 from app.models.category import Category
@@ -84,6 +85,8 @@ check_insecure_defaults()
 check_production_requirements()
 
 Base.metadata.create_all(bind=engine)
+
+ensure_schema_updates()
 
 ensure_search_ready()
 
