@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy import select
+from sqlalchemy import delete, or_, select
 from sqlalchemy.orm import Session
 
 from app.database import get_db
@@ -7,6 +7,7 @@ from app.dependencies import require_admin
 from app.models.category import Category
 from app.models.list import LinkList
 from app.models.user import User
+from app.models.user_expertise import UserExpertise
 from app.schemas.category import CategoryCreate, CategoryUpdate
 from app.utils import slugify
 
@@ -191,6 +192,36 @@ def update_category(
     return serialize_category(category)
 
 
+FALLBACK_CATEGORY_NAMES = ("Varios", "Cat varios")
+
+
+def get_or_create_fallback_category(db: Session) -> Category:
+    fallback = db.scalar(
+        select(Category).where(
+            or_(
+                Category.name.ilike("Varios"),
+                Category.name.ilike("Cat varios"),
+            )
+        )
+    )
+
+    if fallback:
+        return fallback
+
+    fallback = db.scalar(
+        select(Category).where(Category.slug == "varios")
+    )
+
+    if fallback:
+        return fallback
+
+    fallback = Category(name="Varios", slug="varios")
+    db.add(fallback)
+    db.flush()
+
+    return fallback
+
+
 @router.delete("/{category_id}")
 def delete_category(
     category_id: int,
@@ -213,18 +244,48 @@ def delete_category(
             detail="Cannot delete a category that has subcategories",
         )
 
-    referencing_list = db.scalar(
-        select(LinkList).where(
-            (LinkList.category_id == category_id)
-            | (LinkList.subcategory_id == category_id)
-        )
-    )
+    is_fallback = category.name.strip().lower() in {
+        name.lower() for name in FALLBACK_CATEGORY_NAMES
+    }
 
-    if referencing_list:
-        raise HTTPException(
-            status_code=400,
-            detail="Cannot delete a category that is used by existing lists",
-        )
+    main_lists = db.scalars(
+        select(LinkList).where(LinkList.category_id == category_id)
+    ).all()
+
+    fallback = None
+
+    if main_lists:
+        if is_fallback:
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    "Cannot delete the fallback category while lists use it"
+                ),
+            )
+
+        fallback = get_or_create_fallback_category(db)
+
+        if fallback.id == category_id:
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    "Cannot delete the fallback category while lists use it"
+                ),
+            )
+
+        for link_list in main_lists:
+            link_list.category_id = fallback.id
+
+    subcategory_lists = db.scalars(
+        select(LinkList).where(LinkList.subcategory_id == category_id)
+    ).all()
+
+    for link_list in subcategory_lists:
+        link_list.subcategory_id = None
+
+    db.execute(
+        delete(UserExpertise).where(UserExpertise.category_id == category_id)
+    )
 
     db.delete(category)
     db.commit()
@@ -232,4 +293,6 @@ def delete_category(
     return {
         "message": "Category deleted",
         "id": category_id,
+        "moved_lists_to": fallback.id if fallback else None,
+        "cleared_subcategory_lists": len(subcategory_lists),
     }
