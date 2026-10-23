@@ -57,6 +57,12 @@ def add_my_expertise(
             detail="Category not found",
         )
 
+    if category.parent_id is not None:
+        raise HTTPException(
+            status_code=400,
+            detail="Only top-level categories can be selected as expertises",
+        )
+
     existing = db.scalar(
         select(UserExpertise).where(
             UserExpertise.user_id == current_user.id,
