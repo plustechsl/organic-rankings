@@ -52,6 +52,12 @@ export default function Navbar() {
     return (
       <div className="flex items-center gap-4 text-sm">
         <Link
+          href="/categories"
+          className="text-gray-600 transition hover:text-gray-900"
+        >
+          Categorías
+        </Link>
+        <Link
           href="/users"
           className="text-gray-600 transition hover:text-gray-900"
         >
@@ -86,6 +92,12 @@ export default function Navbar() {
 
   return (
     <div className="flex items-center gap-4 text-sm">
+      <Link
+        href="/categories"
+        className="text-gray-600 transition hover:text-gray-900"
+      >
+        Categorías
+      </Link>
       <Link
         href="/users"
         className="text-gray-600 transition hover:text-gray-900"

@@ -5,6 +5,7 @@ import { useEffect, useState, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Navbar from "@/app/components/Navbar";
 import Logo from "@/app/components/Logo";
+import AdSlot from "@/app/components/AdSlot";
 import { api, getToken, ApiRequestError } from "@/app/lib/api";
 import { LinkList, Link as LinkType, Tag } from "@/app/lib/types";
 
@@ -35,6 +36,7 @@ export default function ListDetailPage() {
   const [currentUser, setCurrentUser] = useState<CurrentUser | null>(null);
   const [voteMessage, setVoteMessage] = useState<string | null>(null);
   const [myVotedLinkIds, setMyVotedLinkIds] = useState<Set<number>>(new Set());
+  const [adTheme, setAdTheme] = useState<string | null>(null);
 
   const [showNewLinkForm, setShowNewLinkForm] = useState(false);
   const [newLinkTitle, setNewLinkTitle] = useState("");
@@ -61,6 +63,17 @@ export default function ListDetailPage() {
       }
 
       setList(found);
+
+      if (found.category_id) {
+        try {
+          const categories = await api.get<any[]>("/categories");
+          const cat = categories.find((c) => c.id === found.category_id);
+          if (cat?.slug) setAdTheme(cat.slug);
+          else if (cat?.name) setAdTheme(cat.name.replace(/\s+/g, "-").toLowerCase());
+        } catch {
+          // ignore
+        }
+      }
 
       const listLinks = await api.get<LinkType[]>(
         `/links?list_id=${found.id}`
@@ -294,239 +307,260 @@ export default function ListDetailPage() {
         </div>
       </header>
 
-      <section className="mx-auto max-w-4xl px-6 py-10">
-        <Link
-          href="/lists"
-          className="mb-6 inline-block text-sm text-gray-500 hover:text-gray-900"
-        >
-          ← Volver a listas
-        </Link>
-
-        {loading && <p className="text-sm text-gray-500">Cargando...</p>}
-
-        {error && (
-          <div className="rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700">
-            {error}
-          </div>
-        )}
-
-        {!loading && !error && list && (
-          <>
-            <div className="mb-2 flex items-start justify-between">
-              <h1 className="text-3xl font-semibold">{list.title}</h1>
-
-              {canManageList && !showNewLinkForm && (
-                <button
-                  onClick={() => setShowNewLinkForm(true)}
-                  className="flex-shrink-0 rounded-full bg-gray-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-gray-700"
-                >
-                  Añadir enlace
-                </button>
-              )}
+      <section className="mx-auto max-w-6xl px-6 py-10">
+        <div className="grid grid-cols-1 gap-8 lg:grid-cols-[250px_1fr_250px]">
+          <aside className="hidden lg:block">
+            <div className="sticky top-8">
+              <AdSlot themeSlug={adTheme} />
             </div>
+          </aside>
 
-            {list.description && (
-              <p className="mb-4 text-gray-600">{list.description}</p>
-            )}
+          <div>
+            <Link
+              href="/lists"
+              className="mb-6 inline-block text-sm text-gray-500 hover:text-gray-900"
+            >
+              ← Volver a listas
+            </Link>
 
-            <div className="mb-8 flex items-center gap-4 text-xs text-gray-400">
-              <span>{list.points} puntos</span>
-              <span>
-                {new Date(list.created_at).toLocaleDateString("es-ES")}
-              </span>
-              <span>
-                por{" "}
-                <Link
-                  href={`/users/${list.user_id}`}
-                  className="text-blue-700 hover:underline"
-                >
-                  {list.username ?? `usuario #${list.user_id}`}
-                </Link>
-              </span>
-            </div>
+            {loading && <p className="text-sm text-gray-500">Cargando...</p>}
 
-            {showNewLinkForm && (
-              <form
-                onSubmit={handleCreateLink}
-                className="mb-8 space-y-3 rounded-lg border border-gray-200 p-5"
-              >
-                <h3 className="text-sm font-semibold text-gray-700">
-                  Nuevo enlace
-                </h3>
-
-                <input
-                  value={newLinkTitle}
-                  onChange={(e) => setNewLinkTitle(e.target.value)}
-                  placeholder="Título"
-                  required
-                  className="w-full rounded-lg border border-gray-300 px-4 py-2 text-sm outline-none focus:border-gray-500"
-                />
-
-                <input
-                  value={newLinkUrl}
-                  onChange={(e) => setNewLinkUrl(e.target.value)}
-                  placeholder="https://..."
-                  required
-                  className="w-full rounded-lg border border-gray-300 px-4 py-2 text-sm outline-none focus:border-gray-500"
-                />
-
-                <textarea
-                  value={newLinkDescription}
-                  onChange={(e) => setNewLinkDescription(e.target.value)}
-                  placeholder="Descripción (opcional)"
-                  rows={2}
-                  className="w-full rounded-lg border border-gray-300 px-4 py-2 text-sm outline-none focus:border-gray-500"
-                />
-
-                {newLinkError && (
-                  <p className="rounded-lg bg-red-50 px-4 py-2 text-sm text-red-700">
-                    {newLinkError}
-                  </p>
-                )}
-
-                <div className="flex gap-3">
-                  <button
-                    type="submit"
-                    disabled={savingLink}
-                    className="rounded-full bg-gray-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-gray-700 disabled:opacity-50"
-                  >
-                    {savingLink ? "Guardando..." : "Guardar enlace"}
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => setShowNewLinkForm(false)}
-                    className="rounded-full border border-gray-300 px-4 py-2 text-sm text-gray-700 transition hover:bg-gray-50"
-                  >
-                    Cancelar
-                  </button>
-                </div>
-              </form>
-            )}
-
-            {voteMessage && (
-              <div className="mb-6 rounded-lg bg-gray-50 px-4 py-2 text-sm text-gray-700">
-                {voteMessage}
+            {error && (
+              <div className="rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700">
+                {error}
               </div>
             )}
 
-            {links.length === 0 && (
-              <p className="text-sm text-gray-500">
-                Esta lista todavía no tiene enlaces.
-              </p>
-            )}
+            {!loading && !error && list && (
+              <>
+                <div className="mb-2 flex items-start justify-between">
+                  <h1 className="text-3xl font-semibold">{list.title}</h1>
 
-            <div className="space-y-5">
-              {links.map((link) => (
-                <article
-                  key={link.id}
-                  className="rounded-lg border border-gray-200 p-5"
-                >
-                  <div className="flex items-start justify-between gap-4">
-                    <div className="min-w-0 flex-1">
-                      <a
-                        href={link.url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-lg font-medium text-blue-700 hover:underline"
-                      >
-                        {link.title}
-                      </a>
+                  {canManageList && !showNewLinkForm && (
+                    <button
+                      onClick={() => setShowNewLinkForm(true)}
+                      className="flex-shrink-0 rounded-full bg-gray-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-gray-700"
+                    >
+                      Añadir enlace
+                    </button>
+                  )}
+                </div>
 
-                      <p className="mt-1 truncate text-sm text-green-700">
-                        {link.url}
+                {list.description && (
+                  <p className="mb-4 text-gray-600">{list.description}</p>
+                )}
+
+                <div className="mb-8 flex items-center gap-4 text-xs text-gray-400">
+                  <span>{list.points} puntos</span>
+                  <span>
+                    {new Date(list.created_at).toLocaleDateString("es-ES")}
+                  </span>
+                  <span>
+                    por{" "}
+                    <Link
+                      href={`/users/${list.user_id}`}
+                      className="text-blue-700 hover:underline"
+                    >
+                      {list.username ?? `usuario #${list.user_id}`}
+                    </Link>
+                  </span>
+                </div>
+
+                {showNewLinkForm && (
+                  <form
+                    onSubmit={handleCreateLink}
+                    className="mb-8 space-y-3 rounded-lg border border-gray-200 p-5"
+                  >
+                    <h3 className="text-sm font-semibold text-gray-700">
+                      Nuevo enlace
+                    </h3>
+
+                    <input
+                      value={newLinkTitle}
+                      onChange={(e) => setNewLinkTitle(e.target.value)}
+                      placeholder="Título"
+                      required
+                      className="w-full rounded-lg border border-gray-300 px-4 py-2 text-sm outline-none focus:border-gray-500"
+                    />
+
+                    <input
+                      value={newLinkUrl}
+                      onChange={(e) => setNewLinkUrl(e.target.value)}
+                      placeholder="https://..."
+                      required
+                      className="w-full rounded-lg border border-gray-300 px-4 py-2 text-sm outline-none focus:border-gray-500"
+                    />
+
+                    <textarea
+                      value={newLinkDescription}
+                      onChange={(e) => setNewLinkDescription(e.target.value)}
+                      placeholder="Descripción (opcional)"
+                      rows={2}
+                      className="w-full rounded-lg border border-gray-300 px-4 py-2 text-sm outline-none focus:border-gray-500"
+                    />
+
+                    {newLinkError && (
+                      <p className="rounded-lg bg-red-50 px-4 py-2 text-sm text-red-700">
+                        {newLinkError}
                       </p>
+                    )}
 
-                      {link.description && (
-                        <p className="mt-2 text-sm text-gray-600">
-                          {link.description}
-                        </p>
-                      )}
-
-                      {link.tags.length > 0 && (
-                        <div className="mt-3 flex flex-wrap gap-2">
-                          {link.tags.map((tag) => (
-                            <span
-                              key={tag.id}
-                              className="flex items-center gap-1 rounded-full bg-gray-100 px-3 py-1 text-xs text-gray-600"
-                            >
-                              #{tag.slug}
-                              {canManageLink(link) && (
-                                <button
-                                  onClick={() =>
-                                    handleRemoveTag(link.id, tag.id)
-                                  }
-                                  className="text-gray-400 hover:text-gray-700"
-                                  aria-label={`Quitar tag ${tag.name}`}
-                                >
-                                  ×
-                                </button>
-                              )}
-                            </span>
-                          ))}
-                        </div>
-                      )}
-
-                      {canManageLink(link) && link.tags.length < 10 && (
-                        <div className="mt-3 flex items-center gap-2">
-                          <input
-                            value={tagInputs[link.id] ?? ""}
-                            onChange={(e) =>
-                              setTagInputs((prev) => ({
-                                ...prev,
-                                [link.id]: e.target.value,
-                              }))
-                            }
-                            onKeyDown={(e) => {
-                              if (e.key === "Enter") {
-                                e.preventDefault();
-                                handleAddTags(link.id);
-                              }
-                            }}
-                            placeholder="Añadir tags (separados por espacio)"
-                            className="flex-1 rounded-full border border-gray-300 px-3 py-1 text-xs outline-none focus:border-gray-500"
-                          />
-                          <button
-                            onClick={() => handleAddTags(link.id)}
-                            className="rounded-full border border-gray-300 px-3 py-1 text-xs text-gray-700 hover:bg-gray-50"
-                          >
-                            Añadir
-                          </button>
-                        </div>
-                      )}
-
-                      {tagErrors[link.id] && (
-                        <p className="mt-1 text-xs text-red-600">
-                          {tagErrors[link.id]}
-                        </p>
-                      )}
-                    </div>
-
-                    <div className="flex flex-shrink-0 flex-col items-center gap-1">
+                    <div className="flex gap-3">
                       <button
-                        onClick={() => handleVote(link.id)}
-                        title={
-                          !currentUser
-                            ? "Inicia sesión para votar"
-                            : myVotedLinkIds.has(link.id)
-                            ? "Quitar tu voto"
-                            : "Votar este enlace"
-                        }
-                        className={`rounded-full border px-3 py-1.5 text-sm transition ${
-                          myVotedLinkIds.has(link.id)
-                            ? "border-gray-900 bg-gray-900 text-white"
-                            : "border-gray-300 text-gray-700 hover:border-gray-500 hover:bg-gray-50"
-                        }`}
+                        type="submit"
+                        disabled={savingLink}
+                        className="rounded-full bg-gray-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-gray-700 disabled:opacity-50"
                       >
-                        ▲ {link.points}
+                        {savingLink ? "Guardando..." : "Guardar enlace"}
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => setShowNewLinkForm(false)}
+                        className="rounded-full border border-gray-300 px-4 py-2 text-sm text-gray-700 transition hover:bg-gray-50"
+                      >
+                        Cancelar
                       </button>
                     </div>
+                  </form>
+                )}
+
+                {voteMessage && (
+                  <div className="mb-6 rounded-lg bg-gray-50 px-4 py-2 text-sm text-gray-700">
+                    {voteMessage}
                   </div>
-                </article>
-              ))}
+                )}
+
+                {links.length === 0 && (
+                  <p className="text-sm text-gray-500">
+                    Esta lista todavía no tiene enlaces.
+                  </p>
+                )}
+
+                <div className="space-y-5">
+                  {links.map((link) => (
+                    <article
+                      key={link.id}
+                      className="rounded-lg border border-gray-200 p-5"
+                    >
+                      <div className="flex items-start justify-between gap-4">
+                        <div className="min-w-0 flex-1">
+                          <a
+                            href={link.url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-lg font-medium text-blue-700 hover:underline"
+                          >
+                            {link.title}
+                          </a>
+
+                          <p className="mt-1 truncate text-sm text-green-700">
+                            {link.url}
+                          </p>
+
+                          {link.description && (
+                            <p className="mt-2 text-sm text-gray-600">
+                              {link.description}
+                            </p>
+                          )}
+
+                          {link.tags.length > 0 && (
+                            <div className="mt-3 flex flex-wrap gap-2">
+                              {link.tags.map((tag) => (
+                                <span
+                                  key={tag.id}
+                                  className="flex items-center gap-1 rounded-full bg-gray-100 px-3 py-1 text-xs text-gray-600"
+                                >
+                                  #{tag.slug}
+                                  {canManageLink(link) && (
+                                    <button
+                                      onClick={() =>
+                                        handleRemoveTag(link.id, tag.id)
+                                      }
+                                      className="text-gray-400 hover:text-gray-700"
+                                      aria-label={`Quitar tag ${tag.name}`}
+                                    >
+                                      ×
+                                    </button>
+                                  )}
+                                </span>
+                              ))}
+                            </div>
+                          )}
+
+                          {canManageLink(link) && link.tags.length < 10 && (
+                            <div className="mt-3 flex items-center gap-2">
+                              <input
+                                value={tagInputs[link.id] ?? ""}
+                                onChange={(e) =>
+                                  setTagInputs((prev) => ({
+                                    ...prev,
+                                    [link.id]: e.target.value,
+                                  }))
+                                }
+                                onKeyDown={(e) => {
+                                  if (e.key === "Enter") {
+                                    e.preventDefault();
+                                    handleAddTags(link.id);
+                                  }
+                                }}
+                                placeholder="Añadir tags (separados por espacio)"
+                                className="flex-1 rounded-full border border-gray-300 px-3 py-1 text-xs outline-none focus:border-gray-500"
+                              />
+                              <button
+                                onClick={() => handleAddTags(link.id)}
+                                className="rounded-full border border-gray-300 px-3 py-1 text-xs text-gray-700 hover:bg-gray-50"
+                              >
+                                Añadir
+                              </button>
+                            </div>
+                          )}
+
+                          {tagErrors[link.id] && (
+                            <p className="mt-1 text-xs text-red-600">
+                              {tagErrors[link.id]}
+                            </p>
+                          )}
+                        </div>
+
+                        <div className="flex flex-shrink-0 flex-col items-center gap-1">
+                          <button
+                            onClick={() => handleVote(link.id)}
+                            title={
+                              !currentUser
+                                ? "Inicia sesión para votar"
+                                : myVotedLinkIds.has(link.id)
+                                ? "Quitar tu voto"
+                                : "Votar este enlace"
+                            }
+                            className={`rounded-full border px-3 py-1.5 text-sm transition ${
+                              myVotedLinkIds.has(link.id)
+                                ? "border-gray-900 bg-gray-900 text-white"
+                                : "border-gray-300 text-gray-700 hover:border-gray-500 hover:bg-gray-50"
+                            }`}
+                          >
+                            ▲ {link.points}
+                          </button>
+                        </div>
+                      </div>
+                    </article>
+                  ))}
+                </div>
+              </>
+            )}
+
+            <div className="mt-6 lg:hidden">
+              <AdSlot themeSlug={adTheme} />
+              <AdSlot themeSlug={adTheme} />
             </div>
-          </>
-        )}
+          </div>
+
+          <aside className="hidden lg:block">
+            <div className="sticky top-8">
+              <AdSlot themeSlug={adTheme} />
+            </div>
+          </aside>
+        </div>
       </section>
     </main>
   );

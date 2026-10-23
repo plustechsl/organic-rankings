@@ -4,6 +4,7 @@ import Link from "next/link";
 import { FormEvent, useEffect, useState } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import Navbar from "@/app/components/Navbar";
+import AdSlot from "@/app/components/AdSlot";
 import { api } from "@/app/lib/api";
 import { SearchResponse, LinkList } from "@/app/lib/types";
 
@@ -39,6 +40,7 @@ export default function SearchClient() {
   const [foundLists, setFoundLists] = useState<FoundList[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
+  const [adTheme, setAdTheme] = useState<string | null>(null);
 
   useEffect(() => {
     setInputValue(rawQuery);
@@ -83,8 +85,30 @@ export default function SearchClient() {
             .sort((a, b) => b.points - a.points);
 
           setFoundLists(matched);
+
+          const { category } = parseQuery(rawQuery);
+          if (category) {
+            setAdTheme(category.replace(/\s+/g, "-").toLowerCase());
+          } else if (matched[0]?.category_id) {
+            try {
+              const categories = await api.get<any[]>("/categories");
+              const cat = categories.find((c) => c.id === matched[0].category_id);
+              if (cat?.slug) setAdTheme(cat.slug);
+              else if (cat?.name) setAdTheme(cat.name.replace(/\s+/g, "-").toLowerCase());
+            } catch {
+              // ignore
+            }
+          } else {
+            setAdTheme(null);
+          }
         } else {
           setFoundLists([]);
+          const { category } = parseQuery(rawQuery);
+          if (category) {
+            setAdTheme(category.replace(/\s+/g, "-").toLowerCase());
+          } else {
+            setAdTheme(null);
+          }
         }
       } catch {
         setError(true);
@@ -134,20 +158,28 @@ export default function SearchClient() {
         </div>
       </header>
 
-      <section className="mx-auto max-w-4xl px-6 py-8">
-        {rawQuery && (
-          <p className="mb-8 text-sm text-gray-500">
-            Resultados para &quot;{rawQuery}&quot;
-          </p>
-        )}
+      <section className="mx-auto max-w-6xl px-6 py-8">
+        <div className="grid grid-cols-1 gap-8 lg:grid-cols-[250px_1fr_250px]">
+          <aside className="hidden lg:block">
+            <div className="sticky top-8">
+              <AdSlot themeSlug={adTheme} />
+            </div>
+          </aside>
 
-        {loading && <p className="text-sm text-gray-500">Buscando...</p>}
+          <div>
+            {rawQuery && (
+              <p className="mb-8 text-sm text-gray-500">
+                Resultados para &quot;{rawQuery}&quot;
+              </p>
+            )}
 
-        {error && (
-          <div className="rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700">
-            No se pudo conectar con el buscador.
-          </div>
-        )}
+            {loading && <p className="text-sm text-gray-500">Buscando...</p>}
+
+            {error && (
+              <div className="rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700">
+                No se pudo conectar con el buscador.
+              </div>
+            )}
 
         {!loading && !error && data && data.total === 0 && (
           <div className="py-10 text-center">
@@ -158,83 +190,96 @@ export default function SearchClient() {
           </div>
         )}
 
-        {!loading && !error && foundLists.length > 0 && (
-          <div className="mb-10">
-            <h2 className="mb-4 text-lg font-semibold">Listas encontradas</h2>
+            {!loading && !error && foundLists.length > 0 && (
+              <div className="mb-10">
+                <h2 className="mb-4 text-lg font-semibold">Listas encontradas</h2>
 
-            <div className="space-y-3">
-              {foundLists.map((list) => (
-                <Link
-                  key={list.id}
-                  href={`/lists/${list.slug}`}
-                  className="flex items-center justify-between rounded-lg border border-gray-200 px-4 py-3 transition hover:border-gray-400"
-                >
-                  <div>
-                    <p className="font-medium text-blue-700">{list.title}</p>
-                    <p className="text-xs text-gray-400">
-                      {list.matchCount}{" "}
-                      {list.matchCount === 1
-                        ? "enlace coincide"
-                        : "enlaces coinciden"}
-                    </p>
-                  </div>
+                <div className="space-y-3">
+                  {foundLists.map((list) => (
+                    <Link
+                      key={list.id}
+                      href={`/lists/${list.slug}`}
+                      className="flex items-center justify-between rounded-lg border border-gray-200 px-4 py-3 transition hover:border-gray-400"
+                    >
+                      <div>
+                        <p className="font-medium text-blue-700">{list.title}</p>
+                        <p className="text-xs text-gray-400">
+                          {list.matchCount}{" "}
+                          {list.matchCount === 1
+                            ? "enlace coincide"
+                            : "enlaces coinciden"}
+                        </p>
+                      </div>
 
-                  <span className="flex-shrink-0 text-sm font-medium text-gray-600">
-                    {list.points} pts
-                  </span>
-                </Link>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {!loading && !error && data && data.total > 0 && (
-          <div>
-            <h2 className="mb-4 text-lg font-semibold">Enlaces</h2>
-
-            <div className="space-y-8">
-              {data.results.map((result) => (
-                <article key={result.id}>
-                  <a
-                    href={result.url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="group"
-                  >
-                    <p className="mb-1 text-sm text-green-700">
-                      {result.url}
-                    </p>
-
-                    <h3 className="mb-2 text-xl font-medium text-blue-700 group-hover:underline">
-                      {result.title}
-                    </h3>
-
-                    <p className="text-sm leading-6 text-gray-600">
-                      {result.description}
-                    </p>
-                  </a>
-
-                  <div className="mt-2 flex flex-wrap items-center gap-3 text-xs text-gray-400">
-                    <span>{result.points} puntos</span>
-
-                    {result.category_name && (
-                      <span>en {result.category_name}</span>
-                    )}
-
-                    {result.tags.map((tag) => (
-                      <span
-                        key={tag}
-                        className="rounded-full bg-gray-100 px-2 py-0.5"
-                      >
-                        #{tag}
+                      <span className="flex-shrink-0 text-sm font-medium text-gray-600">
+                        {list.points} pts
                       </span>
-                    ))}
-                  </div>
-                </article>
-              ))}
+                    </Link>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {!loading && !error && data && data.total > 0 && (
+              <div>
+                <h2 className="mb-4 text-lg font-semibold">Enlaces</h2>
+
+                <div className="space-y-8">
+                  {data.results.map((result) => (
+                    <article key={result.id}>
+                      <a
+                        href={result.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="group"
+                      >
+                        <p className="mb-1 text-sm text-green-700">
+                          {result.url}
+                        </p>
+
+                        <h3 className="mb-2 text-xl font-medium text-blue-700 group-hover:underline">
+                          {result.title}
+                        </h3>
+
+                        <p className="text-sm leading-6 text-gray-600">
+                          {result.description}
+                        </p>
+                      </a>
+
+                      <div className="mt-2 flex flex-wrap items-center gap-3 text-xs text-gray-400">
+                        <span>{result.points} puntos</span>
+
+                        {result.category_name && (
+                          <span>en {result.category_name}</span>
+                        )}
+
+                        {result.tags.map((tag) => (
+                          <span
+                            key={tag}
+                            className="rounded-full bg-gray-100 px-2 py-0.5"
+                          >
+                            #{tag}
+                          </span>
+                        ))}
+                      </div>
+                    </article>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            <div className="mt-6 lg:hidden">
+              <AdSlot themeSlug={adTheme} />
+              <AdSlot themeSlug={adTheme} />
             </div>
           </div>
-        )}
+
+          <aside className="hidden lg:block">
+            <div className="sticky top-8">
+              <AdSlot themeSlug={adTheme} />
+            </div>
+          </aside>
+        </div>
       </section>
     </main>
   );
