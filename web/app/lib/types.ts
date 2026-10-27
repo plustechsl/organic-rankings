@@ -74,6 +74,8 @@ export type Link = {
   description: string | null;
   image_url: string | null;
   points: number;
+  ai_score: number | null;
+  ai_checked_at: string | null;
   created_at: string;
   updated_at: string;
 };

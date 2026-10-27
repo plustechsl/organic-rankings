@@ -9,6 +9,10 @@ from app.models.link import Link
 from app.models.list import LinkList
 from app.models.user import User
 from app.schemas.link import LinkCreate, LinkUpdate
+from datetime import datetime, timedelta
+
+from app.ai_detect import analyze_text
+from app.page_fetch import fetch_page_text
 
 
 router = APIRouter(
@@ -29,6 +33,8 @@ def serialize_link(link: Link) -> dict:
         "points": link.points,
         "created_at": link.created_at,
         "updated_at": link.updated_at,
+        "ai_score": link.ai_score,
+        "ai_checked_at": link.ai_checked_at,
     }
 
 
@@ -124,6 +130,11 @@ def update_link(
     payload: LinkUpdate,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
+        if payload.url is not None:
+            if payload.url != link.url:
+                link.ai_score = None
+                link.ai_checked_at = None
+            link.url = payload.url
 ):
     link = db.scalar(
         select(Link).where(Link.id == link_id)
@@ -188,3 +199,37 @@ def delete_link(
         "message": "Link deleted",
         "id": link_id,
     }
+    AI_CHECK_TTL = timedelta(days=1)
+
+
+    @router.post("/{link_id}/ai-check")
+    def ai_check_link(
+        link_id: int,
+        request: Request,
+        current_user: User = Depends(get_current_user),
+        db: Session = Depends(get_db),
+    ):
+        limit_creation(request, current_user.id)
+
+        link = db.scalar(select(Link).where(Link.id == link_id))
+
+        if not link:
+            raise HTTPException(status_code=404, detail="Link not found")
+
+        if link.ai_checked_at and datetime.utcnow() - link.ai_checked_at < AI_CHECK_TTL:
+            return serialize_link(link)
+
+        try:
+            page_text = fetch_page_text(link.url)
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail=str(exc))
+
+        result = analyze_text(page_text)
+
+        link.ai_score = result["score"] if result else None
+        link.ai_checked_at = datetime.utcnow()
+
+        db.commit()
+        db.refresh(link)
+
+        return serialize_link(link)

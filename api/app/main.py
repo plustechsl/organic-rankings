@@ -84,6 +84,10 @@ check_insecure_defaults()
 check_production_requirements()
 
 Base.metadata.create_all(bind=engine)
+from sqlalchemy import text
+with engine.begin() as conn:
+    conn.execute(text("ALTER TABLE links ADD COLUMN IF NOT EXISTS ai_score INTEGER"))
+    conn.execute(text("ALTER TABLE links ADD COLUMN IF NOT EXISTS ai_checked_at TIMESTAMP"))
 
 ensure_search_ready()
 
