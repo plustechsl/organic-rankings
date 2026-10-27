@@ -270,7 +270,6 @@ export default function SearchClient() {
 
             <div className="mt-6 lg:hidden">
               <AdSlot themeSlug={adTheme} />
-              <AdSlot themeSlug={adTheme} />
             </div>
           </div>
 

@@ -551,7 +551,6 @@ export default function ListDetailPage() {
 
             <div className="mt-6 lg:hidden">
               <AdSlot themeSlug={adTheme} />
-              <AdSlot themeSlug={adTheme} />
             </div>
           </div>
 
