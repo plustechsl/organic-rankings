@@ -1,3 +1,5 @@
+from difflib import SequenceMatcher
+
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -17,6 +19,7 @@ router = APIRouter(
 )
 
 MAX_TAGS_PER_LINK = 10
+TAG_SIMILARITY_THRESHOLD = 0.85
 
 
 def serialize_tag(tag: Tag) -> dict:
@@ -26,6 +29,27 @@ def serialize_tag(tag: Tag) -> dict:
         "slug": tag.slug,
         "created_at": tag.created_at,
     }
+
+
+def _find_similar_tag(name: str, db: Session, slug: str) -> Tag | None:
+    candidates = db.scalars(select(Tag)).all()
+    target = name.replace("-", " ")
+    target_slug = slug.replace("-", " ")
+
+    for candidate in candidates:
+        if candidate.slug == slug:
+            continue
+
+        candidate_name = candidate.name.replace("-", " ")
+        ratio = SequenceMatcher(None, target, candidate_name).ratio()
+        if ratio >= TAG_SIMILARITY_THRESHOLD:
+            return candidate
+
+        ratio_slug = SequenceMatcher(None, target_slug, candidate.slug.replace("-", " ")).ratio()
+        if ratio_slug >= TAG_SIMILARITY_THRESHOLD:
+            return candidate
+
+    return None
 
 
 def get_or_create_tag(name: str, db: Session) -> Tag:
@@ -42,7 +66,14 @@ def get_or_create_tag(name: str, db: Session) -> Tag:
     if tag:
         return tag
 
-    tag = Tag(name=name.strip(), slug=slug)
+    similar = _find_similar_tag(name, db, slug)
+    if similar:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Tag '{name}' is too similar to existing tag '{similar.name}'. Use '{similar.name}' instead.",
+        )
+
+    tag = Tag(name=name.strip().lower().replace(" ", "-"), slug=slug)
     db.add(tag)
     db.flush()
 
