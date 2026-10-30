@@ -46,4 +46,7 @@ gunzip -c "$1" | docker compose exec -T postgres psql \
     -U "$POSTGRES_USER" \
     -d "$POSTGRES_DB"
 
+# Reinicia la API para que aplique las migraciones de esquema pendientes
+docker compose restart api
+
 echo "Restauracion completada."

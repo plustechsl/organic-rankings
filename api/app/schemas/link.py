@@ -1,4 +1,8 @@
+from typing import Literal
+
 from pydantic import BaseModel, field_validator
+
+Sensitivity = Literal["none", "adult", "violence"]
 
 
 class LinkCreate(BaseModel):
@@ -7,6 +11,7 @@ class LinkCreate(BaseModel):
     url: str
     description: str | None = None
     image_url: str | None = None
+    sensitivity: Sensitivity = "none"
 
     @field_validator("title")
     @classmethod
@@ -31,3 +36,4 @@ class LinkUpdate(BaseModel):
     url: str | None = None
     description: str | None = None
     image_url: str | None = None
+    sensitivity: Sensitivity | None = None

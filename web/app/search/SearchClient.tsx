@@ -5,8 +5,10 @@ import { FormEvent, useEffect, useState } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import Navbar from "@/app/components/Navbar";
 import AdSlot from "@/app/components/AdSlot";
+import SensitivityBadge from "@/app/components/SensitivityBadge";
 import { api } from "@/app/lib/api";
 import { SearchResponse, LinkList } from "@/app/lib/types";
+import { confirmSensitiveOpen } from "@/app/lib/sensitivity";
 
 function parseQuery(raw: string) {
   let text = raw;
@@ -231,6 +233,9 @@ export default function SearchClient() {
                         href={result.url}
                         target="_blank"
                         rel="noopener noreferrer"
+                        onClick={(e) =>
+                          confirmSensitiveOpen(result.sensitivity, e)
+                        }
                         className="group"
                       >
                         <p className="mb-1 text-sm text-green-700">
@@ -238,7 +243,8 @@ export default function SearchClient() {
                         </p>
 
                         <h3 className="mb-2 text-xl font-medium text-blue-700 group-hover:underline">
-                          {result.title}
+                          {result.title}{" "}
+                          <SensitivityBadge sensitivity={result.sensitivity} />
                         </h3>
 
                         <p className="text-sm leading-6 text-gray-600">

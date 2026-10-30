@@ -49,6 +49,20 @@ class Link(Base):
         index=True,
     )
 
+    sensitivity: Mapped[str] = mapped_column(
+        String(20),
+        default="none",
+        server_default="none",
+        nullable=False,
+    )
+
+    ai_score: Mapped[int | None] = mapped_column(nullable=True)
+
+    ai_checked_at: Mapped[datetime | None] = mapped_column(
+        DateTime,
+        nullable=True,
+    )
+
     created_at: Mapped[datetime] = mapped_column(
         DateTime,
         default=datetime.utcnow,
