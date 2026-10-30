@@ -49,6 +49,13 @@ class Link(Base):
         index=True,
     )
 
+    sensitivity: Mapped[str] = mapped_column(
+        String(20),
+        default="none",
+        server_default="none",
+        nullable=False,
+    )
+
     created_at: Mapped[datetime] = mapped_column(
         DateTime,
         default=datetime.utcnow,

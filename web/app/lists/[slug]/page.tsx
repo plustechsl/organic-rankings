@@ -6,8 +6,13 @@ import { useParams, useRouter } from "next/navigation";
 import Navbar from "@/app/components/Navbar";
 import Logo from "@/app/components/Logo";
 import AdSlot from "@/app/components/AdSlot";
+import SensitivityBadge from "@/app/components/SensitivityBadge";
 import { api, getToken, ApiRequestError } from "@/app/lib/api";
-import { LinkList, Link as LinkType, Tag } from "@/app/lib/types";
+import { LinkList, Link as LinkType, Sensitivity, Tag } from "@/app/lib/types";
+import {
+  SENSITIVITY_OPTIONS,
+  confirmSensitiveOpen,
+} from "@/app/lib/sensitivity";
 
 type LinkWithTags = LinkType & { tags: Tag[] };
 
@@ -42,6 +47,8 @@ export default function ListDetailPage() {
   const [newLinkTitle, setNewLinkTitle] = useState("");
   const [newLinkUrl, setNewLinkUrl] = useState("");
   const [newLinkDescription, setNewLinkDescription] = useState("");
+  const [newLinkSensitivity, setNewLinkSensitivity] =
+    useState<Sensitivity>("none");
   const [newLinkError, setNewLinkError] = useState<string | null>(null);
   const [savingLink, setSavingLink] = useState(false);
 
@@ -191,6 +198,29 @@ export default function ListDetailPage() {
     }
   }
 
+  async function handleChangeSensitivity(
+    linkId: number,
+    sensitivity: Sensitivity
+  ) {
+    try {
+      const updated = await api.patch<LinkType>(`/links/${linkId}`, {
+        sensitivity,
+      });
+
+      setLinks((prev) =>
+        prev.map((l) =>
+          l.id === linkId ? { ...l, sensitivity: updated.sensitivity } : l
+        )
+      );
+    } catch (err) {
+      setVoteMessage(
+        err instanceof ApiRequestError
+          ? err.message
+          : "No se pudo cambiar el tipo de contenido."
+      );
+    }
+  }
+
   async function handleCreateLink(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setNewLinkError(null);
@@ -205,12 +235,14 @@ export default function ListDetailPage() {
         title: newLinkTitle,
         url: newLinkUrl,
         description: newLinkDescription || undefined,
+        sensitivity: newLinkSensitivity,
       });
 
       setLinks((prev) => [...prev, { ...newLink, tags: [] }]);
       setNewLinkTitle("");
       setNewLinkUrl("");
       setNewLinkDescription("");
+      setNewLinkSensitivity("none");
       setShowNewLinkForm(false);
     } catch (err) {
       if (err instanceof ApiRequestError) {
@@ -466,6 +498,20 @@ export default function ListDetailPage() {
                       className="w-full rounded-lg border border-gray-300 px-4 py-2 text-sm outline-none focus:border-gray-500"
                     />
 
+                    <select
+                      value={newLinkSensitivity}
+                      onChange={(e) =>
+                        setNewLinkSensitivity(e.target.value as Sensitivity)
+                      }
+                      className="w-full rounded-lg border border-gray-300 px-4 py-2 text-sm outline-none focus:border-gray-500"
+                    >
+                      {SENSITIVITY_OPTIONS.map((opt) => (
+                        <option key={opt.value} value={opt.value}>
+                          {opt.label}
+                        </option>
+                      ))}
+                    </select>
+
                     {newLinkError && (
                       <p className="rounded-lg bg-red-50 px-4 py-2 text-sm text-red-700">
                         {newLinkError}
@@ -517,10 +563,17 @@ export default function ListDetailPage() {
                               href={link.url}
                               target="_blank"
                               rel="noopener noreferrer"
+                              onClick={(e) =>
+                                confirmSensitiveOpen(link.sensitivity, e)
+                              }
                               className="text-lg font-medium text-blue-700 hover:underline"
                             >
                               {link.title}
                             </a>
+
+                            <SensitivityBadge
+                              sensitivity={link.sensitivity}
+                            />
 
                             {link.username && (
                               <Link
@@ -540,6 +593,27 @@ export default function ListDetailPage() {
                             <p className="mt-2 text-sm text-gray-600">
                               {link.description}
                             </p>
+                          )}
+
+                          {(currentUser?.role === "admin" ||
+                            currentUser?.role === "moderator") && (
+                            <select
+                              value={link.sensitivity ?? "none"}
+                              onChange={(e) =>
+                                handleChangeSensitivity(
+                                  link.id,
+                                  e.target.value as Sensitivity
+                                )
+                              }
+                              aria-label="Tipo de contenido"
+                              className="mt-3 rounded-full border border-gray-300 px-3 py-1 text-xs text-gray-700 outline-none focus:border-gray-500"
+                            >
+                              {SENSITIVITY_OPTIONS.map((opt) => (
+                                <option key={opt.value} value={opt.value}>
+                                  {opt.label}
+                                </option>
+                              ))}
+                            </select>
                           )}
 
                           {link.tags.length > 0 && (

@@ -28,6 +28,7 @@ def serialize_link(link: Link) -> dict:
         "description": link.description,
         "image_url": link.image_url,
         "points": link.points,
+        "sensitivity": link.sensitivity,
         "created_at": link.created_at,
         "updated_at": link.updated_at,
     }
@@ -104,6 +105,7 @@ def create_link(
         url=payload.url,
         description=payload.description,
         image_url=payload.image_url,
+        sensitivity=payload.sensitivity,
     )
 
     db.add(link)
@@ -147,6 +149,14 @@ def update_link(
 
     if payload.image_url is not None:
         link.image_url = payload.image_url
+
+    if payload.sensitivity is not None:
+        if current_user.role not in {"admin", "moderator"}:
+            raise HTTPException(
+                status_code=403,
+                detail="Only admins and moderators can change a link's sensitivity",
+            )
+        link.sensitivity = payload.sensitivity
 
     db.commit()
     db.refresh(link)

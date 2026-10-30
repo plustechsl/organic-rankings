@@ -63,6 +63,8 @@ export type AdminInvitation = {
   reviewed_at: string | null;
 };
 
+export type Sensitivity = "none" | "adult" | "violence";
+
 export type Link = {
   id: number;
   list_id: number;
@@ -73,6 +75,7 @@ export type Link = {
   description: string | null;
   image_url: string | null;
   points: number;
+  sensitivity: Sensitivity;
   created_at: string;
   updated_at: string;
 };
@@ -90,6 +93,7 @@ export type SearchResult = {
   url: string;
   description: string;
   points: number;
+  sensitivity: Sensitivity;
   created_at: string;
   list_id: number;
   list_title: string | null;
