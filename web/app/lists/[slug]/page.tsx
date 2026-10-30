@@ -45,6 +45,13 @@ export default function ListDetailPage() {
   const [newLinkError, setNewLinkError] = useState<string | null>(null);
   const [savingLink, setSavingLink] = useState(false);
 
+  const [adminUsers, setAdminUsers] = useState<
+    { id: number; username: string; is_active: boolean }[]
+  >([]);
+  const [newOwnerId, setNewOwnerId] = useState<number | null>(null);
+  const [transferMessage, setTransferMessage] = useState<string | null>(null);
+  const [transferring, setTransferring] = useState(false);
+
   const [tagInputs, setTagInputs] = useState<Record<number, string>>({});
   const [tagErrors, setTagErrors] = useState<Record<number, string>>({});
 
@@ -63,6 +70,7 @@ export default function ListDetailPage() {
       }
 
       setList(found);
+      setNewOwnerId(found.user_id);
 
       if (found.category_id) {
         try {
@@ -114,12 +122,14 @@ export default function ListDetailPage() {
     loadData();
   }, [loadData]);
 
-  const canManageList =
-    currentUser &&
-    list &&
-    (currentUser.id === list.user_id ||
-      currentUser.role === "admin" ||
-      currentUser.role === "moderator");
+  useEffect(() => {
+    if (currentUser?.role !== "admin") return;
+
+    api
+      .get<{ id: number; username: string; is_active: boolean }[]>("/admin/users")
+      .then((users) => setAdminUsers(users.filter((u) => u.is_active)))
+      .catch(() => setAdminUsers([]));
+  }, [currentUser]);
 
   function canManageLink(link: LinkWithTags): boolean {
     if (!currentUser) return false;
@@ -258,6 +268,29 @@ export default function ListDetailPage() {
     }
   }
 
+  async function handleTransferList() {
+    if (!list || !newOwnerId) return;
+
+    setTransferring(true);
+    setTransferMessage(null);
+
+    try {
+      await api.patch(`/admin/lists/${list.id}/owner?user_id=${newOwnerId}`);
+
+      setTransferMessage("Propietario actualizado.");
+
+      await loadData();
+    } catch (err) {
+      setTransferMessage(
+        err instanceof ApiRequestError
+          ? err.message
+          : "No se pudo cambiar el propietario."
+      );
+    } finally {
+      setTransferring(false);
+    }
+  }
+
   function handleSearch(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
@@ -336,7 +369,7 @@ export default function ListDetailPage() {
                 <div className="mb-2 flex items-start justify-between">
                   <h1 className="text-3xl font-semibold">{list.title}</h1>
 
-                  {canManageList && !showNewLinkForm && (
+                  {currentUser && !showNewLinkForm && (
                     <button
                       onClick={() => setShowNewLinkForm(true)}
                       className="flex-shrink-0 rounded-full bg-gray-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-gray-700"
@@ -365,6 +398,40 @@ export default function ListDetailPage() {
                     </Link>
                   </span>
                 </div>
+
+                {currentUser?.role === "admin" && (
+                  <div className="mb-8 flex flex-wrap items-center gap-2 text-xs text-gray-500">
+                    <span>Propietario:</span>
+
+                    <select
+                      value={newOwnerId ?? list.user_id}
+                      onChange={(e) => setNewOwnerId(Number(e.target.value))}
+                      className="rounded-lg border border-gray-300 px-2 py-1 text-xs outline-none focus:border-gray-500"
+                    >
+                      {!adminUsers.some((u) => u.id === list.user_id) && (
+                        <option value={list.user_id}>
+                          {list.username ?? `usuario #${list.user_id}`}
+                        </option>
+                      )}
+
+                      {adminUsers.map((u) => (
+                        <option key={u.id} value={u.id}>
+                          {u.username}
+                        </option>
+                      ))}
+                    </select>
+
+                    <button
+                      onClick={handleTransferList}
+                      disabled={transferring || newOwnerId === list.user_id}
+                      className="rounded-full border border-gray-300 px-3 py-1 text-xs text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+                    >
+                      {transferring ? "Cambiando..." : "Cambiar"}
+                    </button>
+
+                    {transferMessage && <span>{transferMessage}</span>}
+                  </div>
+                )}
 
                 {showNewLinkForm && (
                   <form
@@ -445,14 +512,25 @@ export default function ListDetailPage() {
                     >
                       <div className="flex items-start justify-between gap-4">
                         <div className="min-w-0 flex-1">
-                          <a
-                            href={link.url}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="text-lg font-medium text-blue-700 hover:underline"
-                          >
-                            {link.title}
-                          </a>
+                          <div className="flex flex-wrap items-baseline gap-x-2">
+                            <a
+                              href={link.url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-lg font-medium text-blue-700 hover:underline"
+                            >
+                              {link.title}
+                            </a>
+
+                            {link.username && (
+                              <Link
+                                href={`/users/${link.user_id}`}
+                                className="text-xs text-gray-400 hover:underline"
+                              >
+                                por {link.username}
+                              </Link>
+                            )}
+                          </div>
 
                           <p className="mt-1 truncate text-sm text-green-700">
                             {link.url}

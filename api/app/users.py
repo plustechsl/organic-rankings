@@ -31,8 +31,7 @@ def get_referral_points(user_id: int, db: Session) -> int:
 def get_user_aura(user_id: int, db: Session) -> int:
     aura = db.scalar(
         select(func.coalesce(func.sum(Link.points), 0))
-        .join(LinkList, Link.list_id == LinkList.id)
-        .where(LinkList.user_id == user_id)
+        .where(Link.user_id == user_id)
     )
 
     total = int(aura or 0)
@@ -52,8 +51,7 @@ def list_users(
             User,
             func.coalesce(func.sum(Link.points), 0).label("aura"),
         )
-        .outerjoin(LinkList, LinkList.user_id == User.id)
-        .outerjoin(Link, Link.list_id == LinkList.id)
+        .outerjoin(Link, Link.user_id == User.id)
         .where(User.is_active.is_(True))
         .group_by(User.id)
     ).all()

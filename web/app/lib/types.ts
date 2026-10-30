@@ -67,6 +67,7 @@ export type Link = {
   id: number;
   list_id: number;
   user_id: number;
+  username: string | null;
   title: string;
   url: string;
   description: string | null;

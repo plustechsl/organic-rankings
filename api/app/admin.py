@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session, joinedload
 
 from app.database import get_db
 from app.dependencies import require_admin
+from app.models.list import LinkList
 from app.models.referral import Invitation
 from app.models.user import User
 
@@ -117,6 +118,47 @@ def change_user_role(
         "role": user.role,
         "is_active": user.is_active,
     }
+
+
+@router.patch("/lists/{list_id}/owner")
+def change_list_owner(
+    list_id: int,
+    user_id: int,
+    current_user: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    link_list = db.scalar(
+        select(LinkList).where(LinkList.id == list_id)
+    )
+
+    if not link_list:
+        raise HTTPException(
+            status_code=404,
+            detail="List not found",
+        )
+
+    new_owner = db.scalar(
+        select(User).where(User.id == user_id)
+    )
+
+    if not new_owner or not new_owner.is_active:
+        raise HTTPException(
+            status_code=404,
+            detail="User not found",
+        )
+
+    link_list.user_id = new_owner.id
+
+    db.commit()
+    db.refresh(link_list)
+
+    return {
+        "id": link_list.id,
+        "user_id": link_list.user_id,
+        "username": new_owner.username,
+    }
+
+
 @router.get("/invitations")
 def list_invitations(
     status: str | None = None,

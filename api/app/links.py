@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy import select
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 
 from app.database import get_db
 from app.dependencies import get_current_user
@@ -22,6 +22,7 @@ def serialize_link(link: Link) -> dict:
         "id": link.id,
         "list_id": link.list_id,
         "user_id": link.user_id,
+        "username": link.user.username if link.user else None,
         "title": link.title,
         "url": link.url,
         "description": link.description,
@@ -38,18 +39,16 @@ def can_manage_link(link: Link, current_user: User) -> bool:
     return is_link_owner or is_privileged
 
 
-def can_add_to_list(link_list: LinkList, current_user: User) -> bool:
-    is_list_owner = link_list.user_id == current_user.id
-    is_privileged = current_user.role in {"admin", "moderator"}
-    return is_list_owner or is_privileged
-
-
 @router.get("")
 def list_links(
     list_id: int | None = None,
     db: Session = Depends(get_db),
 ):
-    query = select(Link).order_by(Link.points.desc(), Link.created_at.desc())
+    query = (
+        select(Link)
+        .options(joinedload(Link.user))
+        .order_by(Link.points.desc(), Link.created_at.desc())
+    )
 
     if list_id is not None:
         query = query.where(Link.list_id == list_id)
@@ -65,7 +64,9 @@ def get_link(
     db: Session = Depends(get_db),
 ):
     link = db.scalar(
-        select(Link).where(Link.id == link_id)
+        select(Link)
+        .options(joinedload(Link.user))
+        .where(Link.id == link_id)
     )
 
     if not link:
@@ -94,12 +95,6 @@ def create_link(
         raise HTTPException(
             status_code=404,
             detail="List not found",
-        )
-
-    if not can_add_to_list(link_list, current_user):
-        raise HTTPException(
-            status_code=403,
-            detail="You do not have permission to add links to this list",
         )
 
     link = Link(
