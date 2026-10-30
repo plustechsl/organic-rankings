@@ -38,27 +38,18 @@ function statusBadgeClass(status: string): string {
 
 function CategoryRow({
   category,
-  nested,
   deleting,
   onDelete,
 }: {
   category: Category;
-  nested: boolean;
   deleting: boolean;
   onDelete: (category: Category) => void;
 }) {
   return (
-    <div
-      className={`flex items-center justify-between px-4 py-3 ${
-        nested ? "bg-gray-50 pl-10" : ""
-      }`}
-    >
+    <div className="flex items-center justify-between px-4 py-3">
       <div>
         <p className="text-sm font-medium text-gray-900">{category.name}</p>
-        <p className="text-xs text-gray-400">
-          /{category.slug}
-          {nested ? " · subcategoría" : ""}
-        </p>
+        <p className="text-xs text-gray-400">/{category.slug}</p>
       </div>
 
       <button
@@ -85,7 +76,6 @@ export default function AdminPage() {
 
   const [categories, setCategories] = useState<Category[]>([]);
   const [categoryName, setCategoryName] = useState("");
-  const [categoryParent, setCategoryParent] = useState("");
   const [savingCategory, setSavingCategory] = useState(false);
   const [deletingCategoryId, setDeletingCategoryId] = useState<number | null>(
     null
@@ -211,11 +201,9 @@ export default function AdminPage() {
     try {
       const created = await api.post<Category>("/categories", {
         name,
-        parent_id: categoryParent ? Number(categoryParent) : null,
       });
 
       setCategoryName("");
-      setCategoryParent("");
       setCategoryNotice(`Categoría «${created.name}» creada.`);
       await loadCategories();
     } catch (err) {
@@ -230,9 +218,7 @@ export default function AdminPage() {
   }
 
   async function handleDeleteCategory(category: Category) {
-    const confirmText = category.parent_id
-      ? `¿Eliminar la subcategoría «${category.name}»?\n\nLas listas que la usen se quedarán sin ella.`
-      : `¿Eliminar la categoría «${category.name}»?\n\nLas listas que la usen pasarán a «Cat varios».`;
+    const confirmText = `¿Eliminar la categoría «${category.name}»?\n\nLas listas que la usen pasarán a «Cat varios».`;
 
     if (!window.confirm(confirmText)) {
       return;
@@ -390,8 +376,7 @@ export default function AdminPage() {
             <h2 className="mb-1 mt-12 text-lg font-semibold">Categorías</h2>
             <p className="mb-4 text-sm text-gray-500">
               Crea categorías para el sitio y elimina las que ya no quieras. Al
-              borrar una categoría principal, sus listas pasan a «Cat varios»;
-              al borrar una subcategoría, las listas se quedan sin ella.
+              borrar una categoría, sus listas pasan a «Cat varios».
             </p>
 
             {categoryError && (
@@ -427,28 +412,6 @@ export default function AdminPage() {
                 />
               </div>
 
-              <div className="min-w-[220px]">
-                <label
-                  htmlFor="category-parent"
-                  className="mb-1 block text-sm text-gray-600"
-                >
-                  Categoría principal (opcional)
-                </label>
-                <select
-                  id="category-parent"
-                  value={categoryParent}
-                  onChange={(event) => setCategoryParent(event.target.value)}
-                  className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm focus:border-gray-500 focus:outline-none"
-                >
-                  <option value="">Ninguna (categoría principal)</option>
-                  {categories.map((category) => (
-                    <option key={category.id} value={category.id}>
-                      {category.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
               <button
                 type="submit"
                 disabled={savingCategory || !categoryName.trim()}
@@ -467,24 +430,12 @@ export default function AdminPage() {
             {categories.length > 0 && (
               <div className="divide-y divide-gray-100 rounded-lg border border-gray-200">
                 {categories.map((category) => (
-                  <div key={category.id}>
-                    <CategoryRow
-                      category={category}
-                      nested={false}
-                      deleting={deletingCategoryId === category.id}
-                      onDelete={handleDeleteCategory}
-                    />
-
-                    {(category.children ?? []).map((child) => (
-                      <CategoryRow
-                        key={child.id}
-                        category={child}
-                        nested={true}
-                        deleting={deletingCategoryId === child.id}
-                        onDelete={handleDeleteCategory}
-                      />
-                    ))}
-                  </div>
+                  <CategoryRow
+                    key={category.id}
+                    category={category}
+                    deleting={deletingCategoryId === category.id}
+                    onDelete={handleDeleteCategory}
+                  />
                 ))}
               </div>
             )}

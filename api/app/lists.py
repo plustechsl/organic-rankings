@@ -29,7 +29,6 @@ def serialize_list(link_list: LinkList) -> dict:
         "image_url": link_list.image_url,
         "points": sum(link.points for link in link_list.links),
         "category_id": link_list.category_id,
-        "subcategory_id": link_list.subcategory_id,
         "created_at": link_list.created_at,
         "updated_at": link_list.updated_at,
     }
@@ -62,9 +61,8 @@ def get_owned_list_or_403(
     return link_list
 
 
-def validate_category_and_subcategory(
+def validate_category(
     category_id: int,
-    subcategory_id: int | None,
     db: Session,
 ) -> None:
     category = db.scalar(
@@ -76,23 +74,6 @@ def validate_category_and_subcategory(
             status_code=404,
             detail="Category not found",
         )
-
-    if subcategory_id is not None:
-        subcategory = db.scalar(
-            select(Category).where(Category.id == subcategory_id)
-        )
-
-        if not subcategory:
-            raise HTTPException(
-                status_code=404,
-                detail="Subcategory not found",
-            )
-
-        if subcategory.parent_id != category_id:
-            raise HTTPException(
-                status_code=400,
-                detail="Subcategory must be a child of the selected category",
-            )
 
 
 @router.get("")
@@ -137,11 +118,7 @@ def create_list(
 ):
     limit_creation(request, current_user.id)
 
-    validate_category_and_subcategory(
-        payload.category_id,
-        payload.subcategory_id,
-        db,
-    )
+    validate_category(payload.category_id, db)
 
     slug = slugify(payload.slug or payload.title)
 
@@ -164,7 +141,6 @@ def create_list(
     link_list = LinkList(
         user_id=current_user.id,
         category_id=payload.category_id,
-        subcategory_id=payload.subcategory_id,
         title=payload.title,
         slug=slug,
         description=payload.description,
@@ -187,27 +163,10 @@ def update_list(
 ):
     link_list = get_owned_list_or_403(list_id, current_user, db)
 
-    new_category_id = (
-        payload.category_id
-        if payload.category_id is not None
-        else link_list.category_id
-    )
+    if payload.category_id is not None:
+        validate_category(payload.category_id, db)
 
-    new_subcategory_id = (
-        payload.subcategory_id
-        if payload.subcategory_id is not None
-        else link_list.subcategory_id
-    )
-
-    if payload.category_id is not None or payload.subcategory_id is not None:
-        validate_category_and_subcategory(
-            new_category_id,
-            new_subcategory_id,
-            db,
-        )
-
-    link_list.category_id = new_category_id
-    link_list.subcategory_id = new_subcategory_id
+        link_list.category_id = payload.category_id
 
     if payload.title is not None:
         link_list.title = payload.title

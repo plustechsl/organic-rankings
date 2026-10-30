@@ -7,7 +7,6 @@ class ListCreate(BaseModel):
     description: str | None = None
     image_url: str | None = None
     category_id: int
-    subcategory_id: int | None = None
 
     @field_validator("title")
     @classmethod
@@ -23,4 +22,3 @@ class ListUpdate(BaseModel):
     description: str | None = None
     image_url: str | None = None
     category_id: int | None = None
-    subcategory_id: int | None = None

@@ -5,7 +5,10 @@ from sqlalchemy.orm import Session
 from app.database import get_db
 from app.dependencies import require_admin
 from app.models.category import Category
+from app.models.link import Link
+from app.models.link_tag import LinkTag
 from app.models.list import LinkList
+from app.models.tag import Tag
 from app.models.user import User
 from app.models.user_expertise import UserExpertise
 from app.schemas.category import CategoryCreate, CategoryUpdate
@@ -18,38 +21,51 @@ router = APIRouter(
 )
 
 
-def serialize_category(category: Category, include_children: bool = False) -> dict:
-    data = {
+def serialize_category(category: Category, tags: list[str]) -> dict:
+    return {
         "id": category.id,
         "name": category.name,
         "slug": category.slug,
-        "parent_id": category.parent_id,
+        "tags": tags,
         "created_at": category.created_at,
         "updated_at": category.updated_at,
     }
 
-    if include_children:
-        data["children"] = [
-            serialize_category(child, include_children=True)
-            for child in sorted(category.children, key=lambda c: c.name)
-        ]
 
-    return data
+def get_tags_by_category(db: Session) -> dict[int, list[str]]:
+    rows = db.execute(
+        select(LinkList.category_id, Tag.name)
+        .join(Link, Link.list_id == LinkList.id)
+        .join(LinkTag, LinkTag.link_id == Link.id)
+        .join(Tag, LinkTag.tag_id == Tag.id)
+        .distinct()
+        .order_by(Tag.name)
+    ).all()
+
+    tags: dict[int, list[str]] = {}
+
+    for category_id, name in rows:
+        tags.setdefault(category_id, []).append(name)
+
+    return tags
 
 
 @router.get("")
 def list_categories(
     db: Session = Depends(get_db),
 ):
-    top_level = db.scalars(
-        select(Category)
-        .where(Category.parent_id.is_(None))
-        .order_by(Category.name)
+    categories = db.scalars(
+        select(Category).order_by(Category.name)
     ).all()
 
+    tags_by_category = get_tags_by_category(db)
+
     return [
-        serialize_category(category, include_children=True)
-        for category in top_level
+        serialize_category(
+            category,
+            tags=tags_by_category.get(category.id, []),
+        )
+        for category in categories
     ]
 
 
@@ -68,7 +84,10 @@ def get_category(
             detail="Category not found",
         )
 
-    return serialize_category(category, include_children=True)
+    return serialize_category(
+        category,
+        tags=get_tags_by_category(db).get(category.id, []),
+    )
 
 
 @router.post("", status_code=201)
@@ -95,28 +114,16 @@ def create_category(
             detail="A category with this slug already exists",
         )
 
-    if payload.parent_id is not None:
-        parent = db.scalar(
-            select(Category).where(Category.id == payload.parent_id)
-        )
-
-        if not parent:
-            raise HTTPException(
-                status_code=404,
-                detail="Parent category not found",
-            )
-
     category = Category(
         name=payload.name,
         slug=slug,
-        parent_id=payload.parent_id,
     )
 
     db.add(category)
     db.commit()
     db.refresh(category)
 
-    return serialize_category(category)
+    return serialize_category(category, tags=[])
 
 
 @router.patch("/{category_id}")
@@ -135,31 +142,6 @@ def update_category(
             status_code=404,
             detail="Category not found",
         )
-
-    if payload.parent_id is not None:
-        if payload.parent_id == category_id:
-            raise HTTPException(
-                status_code=400,
-                detail="A category cannot be its own parent",
-            )
-
-        parent = db.scalar(
-            select(Category).where(Category.id == payload.parent_id)
-        )
-
-        if not parent:
-            raise HTTPException(
-                status_code=404,
-                detail="Parent category not found",
-            )
-
-        if parent.parent_id == category_id:
-            raise HTTPException(
-                status_code=400,
-                detail="Cannot set a child category as the parent",
-            )
-
-        category.parent_id = payload.parent_id
 
     if payload.name is not None:
         category.name = payload.name
@@ -189,7 +171,10 @@ def update_category(
     db.commit()
     db.refresh(category)
 
-    return serialize_category(category)
+    return serialize_category(
+        category,
+        tags=get_tags_by_category(db).get(category.id, []),
+    )
 
 
 FALLBACK_CATEGORY_NAMES = ("Varios", "Cat varios")
@@ -238,12 +223,6 @@ def delete_category(
             detail="Category not found",
         )
 
-    if category.children:
-        raise HTTPException(
-            status_code=400,
-            detail="Cannot delete a category that has subcategories",
-        )
-
     is_fallback = category.name.strip().lower() in {
         name.lower() for name in FALLBACK_CATEGORY_NAMES
     }
@@ -276,13 +255,6 @@ def delete_category(
         for link_list in main_lists:
             link_list.category_id = fallback.id
 
-    subcategory_lists = db.scalars(
-        select(LinkList).where(LinkList.subcategory_id == category_id)
-    ).all()
-
-    for link_list in subcategory_lists:
-        link_list.subcategory_id = None
-
     db.execute(
         delete(UserExpertise).where(UserExpertise.category_id == category_id)
     )
@@ -294,5 +266,4 @@ def delete_category(
         "message": "Category deleted",
         "id": category_id,
         "moved_lists_to": fallback.id if fallback else None,
-        "cleared_subcategory_lists": len(subcategory_lists),
     }

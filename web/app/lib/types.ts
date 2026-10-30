@@ -2,10 +2,9 @@ export type Category = {
   id: number;
   name: string;
   slug: string;
-  parent_id: number | null;
+  tags: string[];
   created_at: string;
   updated_at: string;
-  children?: Category[];
 };
 
 export type LinkList = {
@@ -18,7 +17,6 @@ export type LinkList = {
   image_url: string | null;
   points: number;
   category_id: number;
-  subcategory_id: number | null;
   created_at: string;
   updated_at: string;
 };
@@ -96,8 +94,6 @@ export type SearchResult = {
   list_title: string | null;
   category_id: number | null;
   category_name: string | null;
-  subcategory_id: number | null;
-  subcategory_name: string | null;
   tags: string[];
 };
 

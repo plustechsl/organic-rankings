@@ -78,7 +78,6 @@ def search(
         description="Texto que se quiere buscar",
     ),
     category: str | None = Query(default=None),
-    subcategory: str | None = Query(default=None),
     tag: str | None = Query(default=None),
     sort: str = Query(
         default="points",
@@ -89,7 +88,6 @@ def search(
     db: Session = Depends(get_db),
 ):
     category_alias = aliased(Category)
-    subcategory_alias = aliased(Category)
 
     conditions = []
 
@@ -122,32 +120,16 @@ def search(
     if category:
         normalized = _normalize(category)
         conditions.append(
-            or_(
-                func.f_unaccent(func.lower(category_alias.name))
-                == normalized,
-                func.f_unaccent(func.lower(subcategory_alias.name))
-                == normalized,
-            )
-        )
-
-    if subcategory:
-        normalized = _normalize(subcategory)
-        conditions.append(
-            func.f_unaccent(func.lower(subcategory_alias.name))
+            func.f_unaccent(func.lower(category_alias.name))
             == normalized
         )
 
     base_query = (
-        select(Link, LinkList, category_alias, subcategory_alias)
+        select(Link, LinkList, category_alias)
         .join(LinkList, Link.list_id == LinkList.id)
         .join(
             category_alias,
             LinkList.category_id == category_alias.id,
-        )
-        .join(
-            subcategory_alias,
-            LinkList.subcategory_id == subcategory_alias.id,
-            isouter=True,
         )
         .where(*conditions)
     )
@@ -201,15 +183,9 @@ def search(
             "list_title": link_list.title,
             "category_id": category.id if category else None,
             "category_name": category.name if category else None,
-            "subcategory_id": (
-                subcategory.id if subcategory else None
-            ),
-            "subcategory_name": (
-                subcategory.name if subcategory else None
-            ),
             "tags": tags_by_link.get(link.id, []),
         }
-        for link, link_list, category, subcategory in rows
+        for link, link_list, category in rows
     ]
 
     return {
