@@ -4,7 +4,6 @@ from pydantic import BaseModel, field_validator
 class CategoryCreate(BaseModel):
     name: str
     slug: str | None = None
-    parent_id: int | None = None
 
     @field_validator("name")
     @classmethod
@@ -17,4 +16,3 @@ class CategoryCreate(BaseModel):
 class CategoryUpdate(BaseModel):
     name: str | None = None
     slug: str | None = None
-    parent_id: int | None = None

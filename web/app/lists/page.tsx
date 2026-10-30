@@ -191,14 +191,9 @@ export default function ListsPage() {
             >
               <option value="">Generar automáticamente</option>
               {categories.map((cat) => (
-                <optgroup key={cat.id} label={cat.name}>
-                  <option value={cat.name}>{cat.name}</option>
-                  {(cat.children ?? []).map((sub) => (
-                    <option key={sub.id} value={sub.name}>
-                      {"  "}↳ {sub.name}
-                    </option>
-                  ))}
-                </optgroup>
+                <option key={cat.id} value={cat.name}>
+                  {cat.name}
+                </option>
               ))}
             </select>
 

@@ -21,11 +21,6 @@ class LinkList(Base):
         nullable=False,
     )
 
-    subcategory_id: Mapped[int | None] = mapped_column(
-        ForeignKey("categories.id"),
-        nullable=True,
-    )
-
     title: Mapped[str] = mapped_column(
         String(200),
         nullable=False,
@@ -74,11 +69,6 @@ class LinkList(Base):
     category = relationship(
         "Category",
         foreign_keys=[category_id],
-    )
-
-    subcategory = relationship(
-        "Category",
-        foreign_keys=[subcategory_id],
     )
 
     links = relationship(

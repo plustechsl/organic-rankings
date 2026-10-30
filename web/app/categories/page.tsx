@@ -18,6 +18,12 @@ function categoryHref(category: Category): string {
   return `/search?q=${encodeURIComponent(`categoria:${category.slug}`)}`;
 }
 
+function tagHref(category: Category, tag: string): string {
+  return `/search?q=${encodeURIComponent(
+    `categoria:${category.slug} #${tag}`
+  )}`;
+}
+
 export default function CategoriesPage() {
   const [categories, setCategories] = useState<Category[]>([]);
   const [loading, setLoading] = useState(true);
@@ -36,16 +42,15 @@ export default function CategoriesPage() {
 
   const filtered = categories
     .map((category) => {
-      const children = category.children ?? [];
       const matchesCategory = normalize(category.name).includes(normalizedQuery);
-      const matchingChildren = children.filter((child) =>
-        normalize(child.name).includes(normalizedQuery)
+      const matchingTags = category.tags.filter((tag) =>
+        normalize(tag).includes(normalizedQuery)
       );
 
       return {
         category,
-        children: matchesCategory ? children : matchingChildren,
-        matches: matchesCategory || matchingChildren.length > 0,
+        tags: matchesCategory ? category.tags : matchingTags,
+        matches: matchesCategory || matchingTags.length > 0,
       };
     })
     .filter((entry) => entry.matches);
@@ -72,7 +77,7 @@ export default function CategoriesPage() {
         <input
           value={query}
           onChange={(event) => setQuery(event.target.value)}
-          placeholder="Buscar categorías..."
+          placeholder="Buscar categorías o tags..."
           className="mb-8 w-full rounded-full border border-gray-300 px-5 py-2.5 text-sm outline-none focus:border-gray-500"
         />
 
@@ -94,7 +99,7 @@ export default function CategoriesPage() {
 
         {!loading && !error && filtered.length > 0 && (
           <div className="space-y-6">
-            {filtered.map(({ category, children }) => (
+            {filtered.map(({ category, tags }) => (
               <article
                 key={category.id}
                 className="rounded-lg border border-gray-200 p-5"
@@ -108,15 +113,15 @@ export default function CategoriesPage() {
                   </Link>
                 </h2>
 
-                {children.length > 0 && (
+                {tags.length > 0 && (
                   <div className="flex flex-wrap gap-2">
-                    {children.map((child) => (
+                    {tags.map((tag) => (
                       <Link
-                        key={child.id}
-                        href={categoryHref(child)}
+                        key={tag}
+                        href={tagHref(category, tag)}
                         className="rounded-full border border-gray-300 px-3 py-1.5 text-sm text-gray-700 transition hover:border-gray-500"
                       >
-                        {child.name}
+                        {tag}
                       </Link>
                     ))}
                   </div>

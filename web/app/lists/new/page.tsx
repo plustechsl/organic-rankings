@@ -14,7 +14,6 @@ export default function NewListPage() {
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [categoryId, setCategoryId] = useState<number | "">("");
-  const [subcategoryId, setSubcategoryId] = useState<number | "">("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [checkingAuth, setCheckingAuth] = useState(true);
@@ -33,9 +32,6 @@ export default function NewListPage() {
       .catch(() => setError("No se pudieron cargar las categorías."));
   }, [router]);
 
-  const selectedCategory = categories.find((c) => c.id === categoryId);
-  const subcategories = selectedCategory?.children ?? [];
-
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setError(null);
@@ -52,7 +48,6 @@ export default function NewListPage() {
         title,
         description: description || undefined,
         category_id: categoryId,
-        subcategory_id: subcategoryId || undefined,
       });
 
       router.push(`/lists/${newList.slug}`);
@@ -122,10 +117,9 @@ export default function NewListPage() {
             <select
               id="category"
               value={categoryId}
-              onChange={(e) => {
-                setCategoryId(e.target.value ? Number(e.target.value) : "");
-                setSubcategoryId("");
-              }}
+              onChange={(e) =>
+                setCategoryId(e.target.value ? Number(e.target.value) : "")
+              }
               required
               className="w-full rounded-lg border border-gray-300 px-4 py-2.5 outline-none focus:border-gray-500"
             >
@@ -137,29 +131,6 @@ export default function NewListPage() {
               ))}
             </select>
           </div>
-
-          {subcategories.length > 0 && (
-            <div>
-              <label htmlFor="subcategory" className="mb-1 block text-sm text-gray-600">
-                Subcategoría (opcional)
-              </label>
-              <select
-                id="subcategory"
-                value={subcategoryId}
-                onChange={(e) =>
-                  setSubcategoryId(e.target.value ? Number(e.target.value) : "")
-                }
-                className="w-full rounded-lg border border-gray-300 px-4 py-2.5 outline-none focus:border-gray-500"
-              >
-                <option value="">Sin subcategoría</option>
-                {subcategories.map((sub) => (
-                  <option key={sub.id} value={sub.id}>
-                    {sub.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-          )}
 
           {error && (
             <p className="rounded-lg bg-red-50 px-4 py-2 text-sm text-red-700">

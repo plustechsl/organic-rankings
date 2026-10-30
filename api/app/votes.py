@@ -72,16 +72,7 @@ def vote_link(
         ).all()
     }
 
-    list_category_ids = set()
-
-    if link_list:
-        list_category_ids = {
-            cid
-            for cid in (link_list.category_id, link_list.subcategory_id)
-            if cid is not None
-        }
-
-    if expertise_category_ids & list_category_ids:
+    if link_list and link_list.category_id in expertise_category_ids:
         points = EXPERTISE_MATCH_POINTS
 
     vote = Vote(
