@@ -76,6 +76,8 @@ export type Link = {
   image_url: string | null;
   points: number;
   sensitivity: Sensitivity;
+  ai_score: number | null;
+  ai_checked_at: string | null;
   created_at: string;
   updated_at: string;
 };

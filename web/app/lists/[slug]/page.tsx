@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import AiBadge from "@/app/components/AiBadge";
 import { useEffect, useState, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Navbar from "@/app/components/Navbar";
@@ -588,6 +589,28 @@ export default function ListDetailPage() {
                           <p className="mt-1 truncate text-sm text-green-700">
                             {link.url}
                           </p>
+
+                          <div className="mt-2">
+                            <AiBadge
+                                linkId={link.id}
+                                score={link.ai_score}
+                                checkedAt={link.ai_checked_at}
+                                canCheck={!!currentUser}
+                                onResult={(updated) =>
+                                    setLinks((prev) =>
+                                        prev.map((l) =>
+                                            l.id === updated.id
+                                                ? {
+                                                  ...l,
+                                                  ai_score: updated.ai_score,
+                                                  ai_checked_at: updated.ai_checked_at,
+                                                }
+                                                : l
+                                        )
+                                    )
+                                }
+                            />
+                          </div>
 
                           {link.description && (
                             <p className="mt-2 text-sm text-gray-600">
