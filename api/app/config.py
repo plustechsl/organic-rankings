@@ -63,6 +63,9 @@ VOTE_IP_RATE_WINDOW = int(getenv("VOTE_IP_RATE_WINDOW", "60"))
 CREATION_RATE_LIMIT = int(getenv("CREATION_RATE_LIMIT", "20"))
 CREATION_RATE_WINDOW = int(getenv("CREATION_RATE_WINDOW", "3600"))
 
+PREVIEW_RATE_LIMIT = int(getenv("PREVIEW_RATE_LIMIT", "60"))
+PREVIEW_RATE_WINDOW = int(getenv("PREVIEW_RATE_WINDOW", "3600"))
+
 # =============================================================================
 # Invitaciones
 # =============================================================================

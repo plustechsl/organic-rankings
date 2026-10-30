@@ -89,6 +89,35 @@ export type Tag = {
   created_at: string;
 };
 
+export type LinkPreview = {
+  title: string | null;
+  description: string | null;
+  tags: string[];
+  belongs: boolean;
+  reason: string;
+  category: string | null;
+};
+
+export type LinkRequestStatus = "pending" | "approved" | "rejected";
+
+export type LinkRequest = {
+  id: number;
+  list_id: number;
+  user_id: number;
+  username: string | null;
+  title: string;
+  url: string;
+  description: string | null;
+  tags: string[];
+  sensitivity: Sensitivity;
+  status: LinkRequestStatus;
+  created_at: string;
+  reviewed_at: string | null;
+  reviewed_by: number | null;
+  reviewer_username: string | null;
+  link_id?: number | null;
+};
+
 export type SearchResult = {
   id: number;
   title: string;

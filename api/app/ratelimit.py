@@ -12,6 +12,8 @@ from app.config import (
     LOGIN_FAIL_WINDOW,
     LOGIN_RATE_LIMIT,
     LOGIN_RATE_WINDOW,
+    PREVIEW_RATE_LIMIT,
+    PREVIEW_RATE_WINDOW,
     RATE_LIMIT_ENABLED,
     REDIS_HOST,
     REDIS_PORT,
@@ -130,6 +132,15 @@ def limit_creation(request: Request, user_id: int) -> None:
         "create",
         CREATION_RATE_LIMIT,
         CREATION_RATE_WINDOW,
+        f"user:{user_id}",
+    )
+
+
+def limit_preview(request: Request, user_id: int) -> None:
+    _enforce(
+        "preview",
+        PREVIEW_RATE_LIMIT,
+        PREVIEW_RATE_WINDOW,
         f"user:{user_id}",
     )
 
