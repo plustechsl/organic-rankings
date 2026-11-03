@@ -1,3 +1,5 @@
+import re
+import unicodedata
 from datetime import datetime, timedelta
 
 from fastapi import APIRouter, Depends, HTTPException, Request
@@ -5,14 +7,17 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session, joinedload
 
 from app.ai_detect import analyze_text
+from app.categories import get_tags_by_category
 from app.database import get_db
 from app.dependencies import get_current_user
-from app.page_fetch import fetch_page_text
-from app.ratelimit import limit_creation
+from app.page_fetch import fetch_page_metadata, fetch_page_text
+from app.ratelimit import limit_creation, limit_preview
 from app.models.link import Link
+from app.models.link_tag import LinkTag
 from app.models.list import LinkList
 from app.models.user import User
-from app.schemas.link import LinkCreate, LinkUpdate
+from app.schemas.link import LinkCreate, LinkPreviewRequest, LinkUpdate
+from app.tags import get_or_create_tag
 
 
 AI_CHECK_TTL = timedelta(days=1)
@@ -47,6 +52,122 @@ def can_manage_link(link: Link, current_user: User) -> bool:
     is_link_owner = link.user_id == current_user.id
     is_privileged = current_user.role in {"admin", "moderator"}
     return is_link_owner or is_privileged
+
+
+def normalize_text(value: str) -> str:
+    value = unicodedata.normalize("NFKD", value.lower())
+    value = "".join(char for char in value if not unicodedata.combining(char))
+    return re.sub(r"[^a-z0-9]+", " ", value).strip()
+
+
+def contains_term(haystack: str, term: str) -> bool:
+    term = term.strip()
+
+    if not term:
+        return False
+
+    pattern = rf"(?<![a-z0-9]){re.escape(term)}(?![a-z0-9])"
+    return re.search(pattern, haystack) is not None
+
+
+@router.post("/preview")
+def preview_link(
+    payload: LinkPreviewRequest,
+    request: Request,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    limit_preview(request, current_user.id)
+
+    link_list = db.scalar(
+        select(LinkList)
+        .options(joinedload(LinkList.category))
+        .where(LinkList.id == payload.list_id)
+    )
+
+    if not link_list:
+        raise HTTPException(
+            status_code=404,
+            detail="List not found",
+        )
+
+    try:
+        metadata = fetch_page_metadata(payload.url)
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=422,
+            detail=str(exc),
+        )
+
+    category = link_list.category
+    category_name = category.name if category else None
+    category_tags = (
+        get_tags_by_category(db).get(category.id, [])
+        if category
+        else []
+    )
+
+    haystack = normalize_text(
+        " ".join(
+            part
+            for part in (
+                metadata["title"],
+                metadata["description"] or "",
+                metadata["text"],
+            )
+            if part
+        )
+    )
+
+    category_tokens = [
+        token
+        for token in normalize_text(category_name or "").split()
+        if len(token) >= 2
+    ]
+
+    matched_tags = [
+        tag
+        for tag in category_tags
+        if contains_term(haystack, normalize_text(tag))
+    ]
+
+    name_match = any(
+        contains_term(haystack, token)
+        for token in category_tokens
+    )
+
+    if not category:
+        belongs = True
+        reason = "La lista no tiene categoría; no se puede comprobar."
+    elif name_match or matched_tags:
+        belongs = True
+        details = []
+
+        if name_match:
+            details.append(f"menciona «{category.name}»")
+
+        if matched_tags:
+            details.append("tags: " + ", ".join(matched_tags[:5]))
+
+        reason = (
+            f"Encaja con la categoría «{category.name}» "
+            f"({'; '.join(details)})."
+        )
+    else:
+        belongs = False
+        reason = (
+            f"No se ha encontrado relación con la categoría "
+            f"«{category.name}» ni con sus tags."
+        )
+
+    return {
+        "title": metadata["title"] or None,
+        "description": metadata["description"],
+        "tags": matched_tags[:5],
+        "belongs": belongs,
+        "reason": reason,
+        "category": category_name,
+    }
 
 
 @router.get("")
@@ -118,6 +239,12 @@ def create_link(
     )
 
     db.add(link)
+    db.flush()
+
+    for name in payload.tags:
+        tag = get_or_create_tag(name, db)
+        db.add(LinkTag(link_id=link.id, tag_id=tag.id))
+
     db.commit()
     db.refresh(link)
 

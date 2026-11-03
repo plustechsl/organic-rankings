@@ -15,6 +15,7 @@ from app.models.user import User
 from app.models.category import Category
 from app.models.list import LinkList
 from app.models.link import Link
+from app.models.link_request import LinkRequest
 from app.models.tag import Tag
 from app.models.link_tag import LinkTag
 from app.models.user_expertise import UserExpertise
@@ -28,6 +29,7 @@ from app.search import ensure_search_ready, router as search_router
 from app.categories import router as categories_router
 from app.lists import router as lists_router
 from app.links import router as links_router
+from app.link_requests import router as link_requests_router
 from app.tags import router as tags_router
 from app.expertise import router as expertise_router
 from app.votes import router as votes_router
@@ -104,6 +106,7 @@ app.include_router(search_router)
 app.include_router(categories_router)
 app.include_router(lists_router)
 app.include_router(links_router)
+app.include_router(link_requests_router)
 app.include_router(tags_router)
 app.include_router(expertise_router)
 app.include_router(votes_router)

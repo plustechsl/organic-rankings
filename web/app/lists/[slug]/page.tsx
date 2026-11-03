@@ -2,14 +2,21 @@
 
 import Link from "next/link";
 import AiBadge from "@/app/components/AiBadge";
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Navbar from "@/app/components/Navbar";
 import Logo from "@/app/components/Logo";
 import AdSlot from "@/app/components/AdSlot";
 import SensitivityBadge from "@/app/components/SensitivityBadge";
 import { api, getToken, ApiRequestError } from "@/app/lib/api";
-import { LinkList, Link as LinkType, Sensitivity, Tag } from "@/app/lib/types";
+import {
+  LinkList,
+  Link as LinkType,
+  LinkPreview,
+  LinkRequest,
+  Sensitivity,
+  Tag,
+} from "@/app/lib/types";
 import {
   SENSITIVITY_OPTIONS,
   confirmSensitiveOpen,
@@ -52,6 +59,16 @@ export default function ListDetailPage() {
     useState<Sensitivity>("none");
   const [newLinkError, setNewLinkError] = useState<string | null>(null);
   const [savingLink, setSavingLink] = useState(false);
+  const [newLinkTags, setNewLinkTags] = useState("");
+  const [preview, setPreview] = useState<LinkPreview | null>(null);
+  const [previewedUrl, setPreviewedUrl] = useState<string | null>(null);
+  const [previewLoading, setPreviewLoading] = useState(false);
+  const [previewError, setPreviewError] = useState<string | null>(null);
+  const [requestMessage, setRequestMessage] = useState<string | null>(null);
+  const [pendingRequests, setPendingRequests] = useState<LinkRequest[]>([]);
+  const [myRequests, setMyRequests] = useState<LinkRequest[]>([]);
+  const [reviewingId, setReviewingId] = useState<number | null>(null);
+  const previewRequestRef = useRef(0);
 
   const [adminUsers, setAdminUsers] = useState<
     { id: number; username: string; is_active: boolean }[]
@@ -139,6 +156,47 @@ export default function ListDetailPage() {
       .catch(() => setAdminUsers([]));
   }, [currentUser]);
 
+  const loadRequests = useCallback(async () => {
+    if (!list) {
+      setPendingRequests([]);
+      setMyRequests([]);
+      return;
+    }
+
+    if (getToken()) {
+      try {
+        const mine = await api.get<LinkRequest[]>(
+          `/link-requests/mine?list_id=${list.id}`
+        );
+        setMyRequests(mine);
+      } catch {
+        setMyRequests([]);
+      }
+    } else {
+      setMyRequests([]);
+    }
+
+    const canReview =
+      currentUser?.role === "admin" || currentUser?.id === list.user_id;
+
+    if (canReview) {
+      try {
+        const pending = await api.get<LinkRequest[]>(
+          `/link-requests?list_id=${list.id}`
+        );
+        setPendingRequests(pending);
+      } catch {
+        setPendingRequests([]);
+      }
+    } else {
+      setPendingRequests([]);
+    }
+  }, [list, currentUser]);
+
+  useEffect(() => {
+    loadRequests();
+  }, [loadRequests]);
+
   function canManageLink(link: LinkWithTags): boolean {
     if (!currentUser) return false;
     return (
@@ -222,29 +280,190 @@ export default function ListDetailPage() {
     }
   }
 
+  function resetNewLinkForm() {
+    setNewLinkTitle("");
+    setNewLinkUrl("");
+    setNewLinkDescription("");
+    setNewLinkTags("");
+    setNewLinkSensitivity("none");
+    setNewLinkError(null);
+    setPreview(null);
+    setPreviewedUrl(null);
+    setPreviewError(null);
+    setRequestMessage(null);
+    setShowNewLinkForm(false);
+    previewRequestRef.current += 1;
+  }
+
+  async function fetchPreview(fill = true): Promise<LinkPreview | null> {
+    if (!list) return null;
+
+    const url = newLinkUrl.trim();
+
+    if (!/^https?:\/\//i.test(url)) return null;
+
+    const requestId = previewRequestRef.current + 1;
+    previewRequestRef.current = requestId;
+
+    setPreviewLoading(true);
+    setPreviewError(null);
+    setRequestMessage(null);
+
+    try {
+      const data = await api.post<LinkPreview>("/links/preview", {
+        url,
+        list_id: list.id,
+      });
+
+      if (requestId !== previewRequestRef.current) {
+        return null;
+      }
+
+      setPreview(data);
+      setPreviewedUrl(url);
+
+      if (fill) {
+        if (data.title && !newLinkTitle.trim()) {
+          setNewLinkTitle(data.title);
+        }
+
+        if (data.description && !newLinkDescription.trim()) {
+          setNewLinkDescription(data.description);
+        }
+
+        if (data.tags.length > 0 && !newLinkTags.trim()) {
+          setNewLinkTags(data.tags.join(" "));
+        }
+      }
+
+      return data;
+    } catch (err) {
+      if (requestId !== previewRequestRef.current) {
+        return null;
+      }
+
+      setPreview(null);
+      setPreviewedUrl(null);
+      setPreviewError(
+        err instanceof ApiRequestError
+          ? err.message
+          : "No se pudo leer la página."
+      );
+      return null;
+    } finally {
+      if (requestId === previewRequestRef.current) {
+        setPreviewLoading(false);
+      }
+    }
+  }
+
+  function parseTagInput(): string[] {
+    return newLinkTags
+      .split(/\s+/)
+      .map((tag) => tag.trim())
+      .filter(Boolean);
+  }
+
+  async function handleRequestApproval() {
+    if (!list) return;
+
+    setSavingLink(true);
+    setNewLinkError(null);
+
+    try {
+      await api.post<LinkRequest>("/link-requests", {
+        list_id: list.id,
+        title: newLinkTitle,
+        url: newLinkUrl,
+        description: newLinkDescription || undefined,
+        sensitivity: newLinkSensitivity,
+        tags: parseTagInput(),
+      });
+
+      resetNewLinkForm();
+      setRequestMessage(
+        "Solicitud enviada. El propietario de la lista o un admin debe aceptarla."
+      );
+      await loadRequests();
+    } catch (err) {
+      setNewLinkError(
+        err instanceof ApiRequestError
+          ? err.message
+          : "No se pudo enviar la solicitud."
+      );
+    } finally {
+      setSavingLink(false);
+    }
+  }
+
+  async function handleReview(
+    requestId: number,
+    action: "approve" | "reject"
+  ) {
+    setReviewingId(requestId);
+    setRequestMessage(null);
+
+    try {
+      await api.patch<LinkRequest>(`/link-requests/${requestId}`, {
+        action,
+      });
+      await loadData();
+      await loadRequests();
+    } catch (err) {
+      setRequestMessage(
+        err instanceof ApiRequestError
+          ? err.message
+          : "No se pudo revisar la solicitud."
+      );
+    } finally {
+      setReviewingId(null);
+    }
+  }
+
   async function handleCreateLink(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setNewLinkError(null);
 
     if (!list) return;
 
+    if (preview?.belongs === false && !canApprove) {
+      await handleRequestApproval();
+      return;
+    }
+
+    let checked = preview;
+
+    if (!checked && !previewError) {
+      checked = await fetchPreview(false);
+    }
+
+    if (checked?.belongs === false && !canApprove) {
+      return;
+    }
+
     setSavingLink(true);
 
     try {
+      const tags = parseTagInput();
+
       const newLink = await api.post<LinkType>("/links", {
         list_id: list.id,
         title: newLinkTitle,
         url: newLinkUrl,
         description: newLinkDescription || undefined,
         sensitivity: newLinkSensitivity,
+        tags,
       });
 
-      setLinks((prev) => [...prev, { ...newLink, tags: [] }]);
-      setNewLinkTitle("");
-      setNewLinkUrl("");
-      setNewLinkDescription("");
-      setNewLinkSensitivity("none");
-      setShowNewLinkForm(false);
+      const createdTags =
+        tags.length > 0
+          ? await api
+              .get<Tag[]>(`/links/${newLink.id}/tags`)
+              .catch(() => [])
+          : [];
+
+      setLinks((prev) => [...prev, { ...newLink, tags: createdTags }]);
+      resetNewLinkForm();
     } catch (err) {
       if (err instanceof ApiRequestError) {
         setNewLinkError(err.message);
@@ -336,6 +555,11 @@ export default function ListDetailPage() {
     router.push(`/search?q=${encodeURIComponent(trimmed)}`);
   }
 
+  const canApprove =
+    !!currentUser &&
+    !!list &&
+    (currentUser.role === "admin" || currentUser.id === list.user_id);
+
   return (
     <main className="min-h-screen bg-white text-gray-900">
       <header className="border-b border-gray-200">
@@ -404,7 +628,10 @@ export default function ListDetailPage() {
 
                   {currentUser && !showNewLinkForm && (
                     <button
-                      onClick={() => setShowNewLinkForm(true)}
+                      onClick={() => {
+                        resetNewLinkForm();
+                        setShowNewLinkForm(true);
+                      }}
                       className="flex-shrink-0 rounded-full bg-gray-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-gray-700"
                     >
                       Añadir enlace
@@ -466,6 +693,94 @@ export default function ListDetailPage() {
                   </div>
                 )}
 
+                {canApprove && pendingRequests.length > 0 && (
+                  <div className="mb-8 rounded-lg border border-amber-200 bg-amber-50 p-5">
+                    <h3 className="mb-3 text-sm font-semibold text-amber-900">
+                      Solicitudes pendientes
+                    </h3>
+
+                    <div className="space-y-3">
+                      {pendingRequests.map((req) => (
+                        <div
+                          key={req.id}
+                          className="rounded-lg border border-amber-200 bg-white p-4"
+                        >
+                          <div className="flex flex-wrap items-baseline gap-x-2">
+                            <a
+                              href={req.url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="font-medium text-blue-700 hover:underline"
+                            >
+                              {req.title}
+                            </a>
+
+                            <span className="text-xs text-gray-500">
+                              por{" "}
+                              {req.username ?? `usuario #${req.user_id}`}
+                            </span>
+                          </div>
+
+                          <p className="mt-1 truncate text-xs text-green-700">
+                            {req.url}
+                          </p>
+
+                          {req.tags.length > 0 && (
+                            <p className="mt-1 text-xs text-gray-500">
+                              Tags: {req.tags.join(", ")}
+                            </p>
+                          )}
+
+                          <div className="mt-3 flex gap-2">
+                            <button
+                              onClick={() => handleReview(req.id, "approve")}
+                              disabled={reviewingId === req.id}
+                              className="rounded-full bg-green-700 px-3 py-1 text-xs font-medium text-white transition hover:bg-green-600 disabled:opacity-50"
+                            >
+                              Aceptar
+                            </button>
+
+                            <button
+                              onClick={() => handleReview(req.id, "reject")}
+                              disabled={reviewingId === req.id}
+                              className="rounded-full border border-red-300 px-3 py-1 text-xs text-red-700 transition hover:bg-red-50 disabled:opacity-50"
+                            >
+                              Rechazar
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {myRequests.length > 0 && (
+                  <div className="mb-6 rounded-lg bg-gray-50 px-4 py-3 text-xs text-gray-600">
+                    <p className="font-medium text-gray-700">
+                      Tus solicitudes en esta lista
+                    </p>
+
+                    <ul className="mt-1 space-y-1">
+                      {myRequests.map((req) => (
+                        <li key={req.id}>
+                          {req.title}:{" "}
+                          {req.status === "pending"
+                            ? "pendiente"
+                            : req.status === "approved"
+                              ? "aceptada"
+                              : "rechazada"}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+
+                {requestMessage && (
+                  <div className="mb-6 rounded-lg bg-gray-50 px-4 py-2 text-sm text-gray-700">
+                    {requestMessage}
+                  </div>
+                )}
+
                 {showNewLinkForm && (
                   <form
                     onSubmit={handleCreateLink}
@@ -485,17 +800,93 @@ export default function ListDetailPage() {
 
                     <input
                       value={newLinkUrl}
-                      onChange={(e) => setNewLinkUrl(e.target.value)}
+                      onChange={(e) => {
+                        const value = e.target.value;
+
+                        setNewLinkUrl(value);
+                        setPreviewError(null);
+
+                        if (
+                          previewedUrl &&
+                          value.trim() !== previewedUrl
+                        ) {
+                          if (preview) {
+                            if (
+                              newLinkTitle === (preview.title ?? "")
+                            ) {
+                              setNewLinkTitle("");
+                            }
+
+                            if (
+                              newLinkDescription ===
+                              (preview.description ?? "")
+                            ) {
+                              setNewLinkDescription("");
+                            }
+
+                            if (
+                              newLinkTags ===
+                              preview.tags.join(" ")
+                            ) {
+                              setNewLinkTags("");
+                            }
+                          }
+
+                          setPreview(null);
+                          setPreviewedUrl(null);
+                        }
+                      }}
+                      onBlur={() => {
+                        void fetchPreview();
+                      }}
                       placeholder="https://..."
                       required
                       className="w-full rounded-lg border border-gray-300 px-4 py-2 text-sm outline-none focus:border-gray-500"
                     />
+
+                    {previewLoading && (
+                      <p className="text-xs text-gray-500">
+                        Leyendo la página...
+                      </p>
+                    )}
+
+                    {previewError && (
+                      <p className="rounded-lg bg-amber-50 px-4 py-2 text-xs text-amber-800">
+                        {previewError} Puedes rellenar los datos a mano y
+                        guardar.
+                      </p>
+                    )}
+
+                    {preview && (
+                      <p
+                        className={`rounded-lg px-4 py-2 text-xs ${
+                          preview.belongs
+                            ? "bg-green-50 text-green-800"
+                            : "bg-amber-50 text-amber-800"
+                        }`}
+                      >
+                        {preview.reason}
+                        {!preview.belongs && canApprove
+                          ? " Puedes guardarlo igualmente como propietario o admin."
+                          : ""}
+                        {!preview.belongs && !canApprove
+                          ? " Puedes cancelar o pedir aprobación al propietario de la lista o a un admin."
+                          : ""}
+                      </p>
+                    )}
 
                     <textarea
                       value={newLinkDescription}
                       onChange={(e) => setNewLinkDescription(e.target.value)}
                       placeholder="Descripción (opcional)"
                       rows={2}
+                      className="w-full rounded-lg border border-gray-300 px-4 py-2 text-sm outline-none focus:border-gray-500"
+                    />
+
+                    <input
+                      value={newLinkTags}
+                      onChange={(e) => setNewLinkTags(e.target.value)}
+                      placeholder="Tags separados por espacio"
                       className="w-full rounded-lg border border-gray-300 px-4 py-2 text-sm outline-none focus:border-gray-500"
                     />
 
@@ -520,17 +911,29 @@ export default function ListDetailPage() {
                     )}
 
                     <div className="flex gap-3">
-                      <button
-                        type="submit"
-                        disabled={savingLink}
-                        className="rounded-full bg-gray-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-gray-700 disabled:opacity-50"
-                      >
-                        {savingLink ? "Guardando..." : "Guardar enlace"}
-                      </button>
+                      {preview?.belongs === false && !canApprove ? (
+                        <button
+                          type="submit"
+                          disabled={savingLink}
+                          className="rounded-full bg-amber-700 px-4 py-2 text-sm font-medium text-white transition hover:bg-amber-600 disabled:opacity-50"
+                        >
+                          {savingLink
+                            ? "Enviando..."
+                            : "Pedir aprobación"}
+                        </button>
+                      ) : (
+                        <button
+                          type="submit"
+                          disabled={savingLink}
+                          className="rounded-full bg-gray-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-gray-700 disabled:opacity-50"
+                        >
+                          {savingLink ? "Guardando..." : "Guardar enlace"}
+                        </button>
+                      )}
 
                       <button
                         type="button"
-                        onClick={() => setShowNewLinkForm(false)}
+                        onClick={resetNewLinkForm}
                         className="rounded-full border border-gray-300 px-4 py-2 text-sm text-gray-700 transition hover:bg-gray-50"
                       >
                         Cancelar
