@@ -334,6 +334,10 @@ export default function ListDetailPage() {
         if (data.tags.length > 0 && !newLinkTags.trim()) {
           setNewLinkTags(data.tags.join(" "));
         }
+
+        if (data.sensitivity !== "none" && newLinkSensitivity === "none") {
+          setNewLinkSensitivity(data.sensitivity);
+        }
       }
 
       return data;
@@ -829,6 +833,13 @@ export default function ListDetailPage() {
                               preview.tags.join(" ")
                             ) {
                               setNewLinkTags("");
+                            }
+
+                            if (
+                              preview.sensitivity !== "none" &&
+                              newLinkSensitivity === preview.sensitivity
+                            ) {
+                              setNewLinkSensitivity("none");
                             }
                           }
 
