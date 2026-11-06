@@ -80,11 +80,72 @@ VIOLENCE_TERMS = (
     "sadismo",
     "golpiza",
     "paliza",
+    "guerra",
+    "guerras",
+    "muerto",
+    "muerta",
+    "muertos",
+    "muertas",
+    "muerte",
+    "muertes",
+    "fallecido",
+    "fallecida",
+    "fallecidos",
+    "fallecidas",
+    "bajas",
+    "invasion",
+    "misil",
+    "misiles",
+    "bombardeo",
+    "bombardeos",
+    "explosion",
+    "explosiones",
+    "explosivo",
+    "explosivos",
+    "crimen",
+    "crimenes",
+    "asesino",
+    "asesina",
+    "asesinos",
+    "asesinas",
+    "homicida",
+    "homicidas",
+    "agresion",
+    "agresiones",
+    "agresor",
+    "agresora",
+    "agresores",
+    "agresoras",
+    "terrorista",
+    "terroristas",
+    "sangre",
+    "matar",
+    "mataron",
+)
+
+WEAK_VIOLENCE_TERMS = (
+    "ataque",
+    "ataques",
+    "combate",
+    "combates",
+    "herido",
+    "herida",
+    "heridos",
+    "heridas",
+    "disparo",
+    "disparos",
+    "arma",
+    "armas",
+    "cuchillo",
+    "cuchillos",
+    "navaja",
+    "navajas",
 )
 
 LEAD_ADULT_HITS = 1
 BODY_ADULT_HITS = 2
 LEAD_VIOLENCE_HITS = 1
+WEAK_LEAD_VIOLENCE_HITS = 2
 BODY_VIOLENCE_HITS = 3
 
 
@@ -117,7 +178,9 @@ def detect_sensitivity(
     adult_lead = _match_terms(lead, ADULT_TERMS)
     adult_body = _match_terms(body, ADULT_TERMS)
     violence_lead = _match_terms(lead, VIOLENCE_TERMS)
+    weak_violence_lead = _match_terms(lead, WEAK_VIOLENCE_TERMS)
     violence_body = _match_terms(body, VIOLENCE_TERMS)
+    weak_violence_body = _match_terms(body, WEAK_VIOLENCE_TERMS)
 
     if (
         len(adult_lead) >= LEAD_ADULT_HITS
@@ -127,7 +190,8 @@ def detect_sensitivity(
 
     if (
         len(violence_lead) >= LEAD_VIOLENCE_HITS
-        or len(violence_body) >= BODY_VIOLENCE_HITS
+        or len(weak_violence_lead) >= WEAK_LEAD_VIOLENCE_HITS
+        or len(violence_body) + len(weak_violence_body) >= BODY_VIOLENCE_HITS
     ):
         return "violence"
 
