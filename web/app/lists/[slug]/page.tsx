@@ -609,7 +609,7 @@ export default function ListDetailPage() {
             </div>
           </aside>
 
-          <div>
+          <div className="min-w-0">
             <Link
               href="/lists"
               className="mb-6 inline-block text-sm text-gray-500 hover:text-gray-900"
