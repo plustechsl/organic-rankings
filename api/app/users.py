@@ -28,16 +28,19 @@ def get_referral_points(user_id: int, db: Session) -> int:
     return int(points or 0)
 
 
-def get_user_aura(user_id: int, db: Session) -> int:
+def get_user_aura(user: User, db: Session) -> int:
+    if user.role == "admin":
+        return 0
+
     aura = db.scalar(
         select(func.coalesce(func.sum(Link.points), 0))
-        .where(Link.user_id == user_id)
+        .where(Link.user_id == user.id)
     )
 
     total = int(aura or 0)
 
     if REFERRAL_TO_AURA:
-        total += get_referral_points(user_id, db)
+        total += get_referral_points(user.id, db)
 
     return total
 
@@ -52,7 +55,10 @@ def list_users(
             func.coalesce(func.sum(Link.points), 0).label("aura"),
         )
         .outerjoin(Link, Link.user_id == User.id)
-        .where(User.is_active.is_(True))
+        .where(
+            User.is_active.is_(True),
+            User.role != "admin",
+        )
         .group_by(User.id)
     ).all()
 
@@ -121,7 +127,8 @@ def get_user(
     return {
         "id": user.id,
         "username": user.username,
+        "role": user.role,
         "created_at": user.created_at,
-        "aura": get_user_aura(user_id, db),
+        "aura": get_user_aura(user, db),
         "lists": [serialize_list(link_list) for link_list in lists],
     }

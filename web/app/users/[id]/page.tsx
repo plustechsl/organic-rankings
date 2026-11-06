@@ -83,15 +83,17 @@ export default function PublicProfilePage() {
               </div>
             </div>
 
-            <div className="mb-8 rounded-lg border border-gray-200 p-5">
-              <h2 className="text-sm font-semibold uppercase tracking-wide text-gray-500">
-                Aura
-              </h2>
-              <p className="mt-2 text-3xl font-semibold">{profile.aura}</p>
-              <p className="mt-1 text-xs text-gray-400">
-                Valoración de los enlaces de sus listas más los puntos por invitaciones aprobadas.
-              </p>
-            </div>
+            {profile.role !== "admin" && (
+              <div className="mb-8 rounded-lg border border-gray-200 p-5">
+                <h2 className="text-sm font-semibold uppercase tracking-wide text-gray-500">
+                  Aura
+                </h2>
+                <p className="mt-2 text-3xl font-semibold">{profile.aura}</p>
+                <p className="mt-1 text-xs text-gray-400">
+                  Valoración de los enlaces de sus listas más los puntos por invitaciones aprobadas.
+                </p>
+              </div>
+            )}
 
             <h2 className="mb-4 text-lg font-semibold">
               Listas de {profile.username}

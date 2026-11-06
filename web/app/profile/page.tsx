@@ -240,26 +240,28 @@ export default function ProfilePage() {
               </div>
             </div>
 
-            <div className="mb-8 rounded-lg border border-gray-200 p-5">
-              <div className="flex items-center justify-between">
-                <div>
-                  <h2 className="text-sm font-semibold uppercase tracking-wide text-gray-500">
-                    Aura
-                  </h2>
-                  <p className="mt-2 text-3xl font-semibold">{aura}</p>
-                  <p className="mt-1 text-xs text-gray-400">
-                    Valoración de los enlaces de tus listas más los puntos por invitaciones aprobadas.
-                  </p>
-                </div>
+            {user.role !== "admin" && (
+              <div className="mb-8 rounded-lg border border-gray-200 p-5">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h2 className="text-sm font-semibold uppercase tracking-wide text-gray-500">
+                      Aura
+                    </h2>
+                    <p className="mt-2 text-3xl font-semibold">{aura}</p>
+                    <p className="mt-1 text-xs text-gray-400">
+                      Valoración de los enlaces de tus listas más los puntos por invitaciones aprobadas.
+                    </p>
+                  </div>
 
-                <Link
-                  href={`/users/${user.id}`}
-                  className="text-sm text-blue-700 hover:underline"
-                >
-                  Ver perfil público
-                </Link>
+                  <Link
+                    href={`/users/${user.id}`}
+                    className="text-sm text-blue-700 hover:underline"
+                  >
+                    Ver perfil público
+                  </Link>
+                </div>
               </div>
-            </div>
+            )}
 
             {referrals && (
               <div className="mb-8 rounded-lg border border-gray-200 p-5">

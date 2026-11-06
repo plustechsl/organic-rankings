@@ -29,6 +29,7 @@ export type PublicUser = {
 };
 
 export type PublicUserProfile = PublicUser & {
+  role: string;
   lists: LinkList[];
 };
 
