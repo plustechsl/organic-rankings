@@ -96,6 +96,7 @@ export type LinkPreview = {
   belongs: boolean;
   reason: string;
   category: string | null;
+  sensitivity: Sensitivity;
 };
 
 export type LinkRequestStatus = "pending" | "approved" | "rejected";

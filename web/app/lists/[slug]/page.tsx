@@ -334,6 +334,10 @@ export default function ListDetailPage() {
         if (data.tags.length > 0 && !newLinkTags.trim()) {
           setNewLinkTags(data.tags.join(" "));
         }
+
+        if (data.sensitivity !== "none" && newLinkSensitivity === "none") {
+          setNewLinkSensitivity(data.sensitivity);
+        }
       }
 
       return data;
@@ -605,7 +609,7 @@ export default function ListDetailPage() {
             </div>
           </aside>
 
-          <div>
+          <div className="min-w-0">
             <Link
               href="/lists"
               className="mb-6 inline-block text-sm text-gray-500 hover:text-gray-900"
@@ -829,6 +833,13 @@ export default function ListDetailPage() {
                               preview.tags.join(" ")
                             ) {
                               setNewLinkTags("");
+                            }
+
+                            if (
+                              preview.sensitivity !== "none" &&
+                              newLinkSensitivity === preview.sensitivity
+                            ) {
+                              setNewLinkSensitivity("none");
                             }
                           }
 

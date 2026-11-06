@@ -12,6 +12,7 @@ from app.database import get_db
 from app.dependencies import get_current_user
 from app.page_fetch import fetch_page_metadata, fetch_page_text
 from app.ratelimit import limit_creation, limit_preview
+from app.sensitivity_detect import detect_sensitivity
 from app.models.link import Link
 from app.models.link_tag import LinkTag
 from app.models.list import LinkList
@@ -167,6 +168,11 @@ def preview_link(
         "belongs": belongs,
         "reason": reason,
         "category": category_name,
+        "sensitivity": detect_sensitivity(
+            metadata["title"],
+            metadata["description"],
+            metadata["text"],
+        ),
     }
 
 
