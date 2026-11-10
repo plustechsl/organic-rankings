@@ -8,7 +8,7 @@ from app.config import (
     JWT_SECRET_DEFAULT,
     TURNSTILE_SECRET_KEY,
 )
-from app.database import Base, engine
+from app.database import Base, SessionLocal, engine
 from app.migrations import ensure_schema_updates
 from app.utils import IP_HASH_SALT, IP_HASH_SALT_DEFAULT
 from app.models.user import User
@@ -18,6 +18,7 @@ from app.models.link import Link
 from app.models.link_request import LinkRequest
 from app.models.tag import Tag
 from app.models.link_tag import LinkTag
+from app.models.translation import Translation
 from app.models.user_expertise import UserExpertise
 from app.models.vote import Vote
 from app.models.user_reputation import UserReputation
@@ -83,6 +84,32 @@ def check_production_requirements() -> None:
         )
 
 
+def run_translation_backfill() -> None:
+    from app.translate import translation_enabled
+    from app.translations import backfill_all
+
+    if not translation_enabled():
+        return
+
+    try:
+        db = SessionLocal()
+
+        try:
+            report = backfill_all(db)
+            logger.info(
+                "Translation backfill done: %s",
+                report,
+            )
+        finally:
+            db.close()
+    except Exception as exc:
+        logger.warning(
+            "Translation backfill failed (will retry on next "
+            "read): %s",
+            exc,
+        )
+
+
 check_insecure_defaults()
 check_production_requirements()
 
@@ -91,6 +118,8 @@ Base.metadata.create_all(bind=engine)
 ensure_schema_updates()
 
 ensure_search_ready()
+
+run_translation_backfill()
 
 
 app = FastAPI(

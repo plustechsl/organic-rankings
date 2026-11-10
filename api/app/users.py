@@ -9,6 +9,7 @@ from app.models.link import Link
 from app.models.list import LinkList
 from app.models.referral import Invitation
 from app.models.user import User
+from app.translations import ensure_translations, get_lang
 
 
 router = APIRouter(
@@ -97,6 +98,7 @@ def list_users(
 @router.get("/{user_id}")
 def get_user(
     user_id: int,
+    lang: str | None = Depends(get_lang),
     db: Session = Depends(get_db),
 ):
     user = db.scalar(
@@ -124,11 +126,29 @@ def get_user(
         reverse=True,
     )
 
+    translations = {}
+
+    if lang:
+        translations = ensure_translations(
+            db,
+            "list",
+            lists,
+            lang,
+            get_title=lambda link_list: link_list.title,
+            get_description=lambda link_list: link_list.description,
+        )
+
     return {
         "id": user.id,
         "username": user.username,
         "role": user.role,
         "created_at": user.created_at,
         "aura": get_user_aura(user, db),
-        "lists": [serialize_list(link_list) for link_list in lists],
+        "lists": [
+            serialize_list(
+                link_list,
+                translation=translations.get(link_list.id),
+            )
+            for link_list in lists
+        ],
     }

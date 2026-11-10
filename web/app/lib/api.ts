@@ -72,8 +72,19 @@ async function request<T>(
   return response.json() as Promise<T>;
 }
 
+function withLang(path: string, lang?: string): string {
+  if (!lang) {
+    return path;
+  }
+
+  const separator = path.includes("?") ? "&" : "?";
+
+  return `${path}${separator}lang=${encodeURIComponent(lang)}`;
+}
+
 export const api = {
-  get: <T>(path: string) => request<T>(path, { method: "GET" }),
+  get: <T>(path: string, opts?: { lang?: string }) =>
+    request<T>(withLang(path, opts?.lang), { method: "GET" }),
 
   post: <T>(path: string, body?: unknown) =>
     request<T>(path, {

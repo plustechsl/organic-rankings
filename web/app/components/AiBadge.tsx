@@ -2,6 +2,8 @@
 
 import { useState } from "react";
 import { api } from "@/app/lib/api";
+import { useLang } from "@/app/lib/lang";
+import { format } from "@/app/lib/i18n";
 import { Link as LinkType } from "@/app/lib/types";
 
 type Props = {
@@ -22,6 +24,8 @@ export default function AiBadge({
                                     canCheck,
                                     onResult,
                                 }: Props) {
+    const { t } = useLang();
+
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
@@ -33,7 +37,7 @@ export default function AiBadge({
             const updated = await api.post<LinkType>(`/links/${linkId}/ai-check`);
             onResult(updated);
         } catch (err) {
-            setError(err instanceof Error ? err.message : "No se pudo analizar");
+            setError(err instanceof Error ? err.message : t.ai.error);
         } finally {
             setLoading(false);
         }
@@ -50,9 +54,9 @@ export default function AiBadge({
         return (
             <span
                 className={`${BASE} ${color}`}
-                title="Estimación automática; no es una certificación"
+                title={t.ai.disclaimer}
             >
-        Contenido IA: ~{score}% (estimación)
+        {format(t.ai.content, { score })}
       </span>
         );
     }
@@ -60,7 +64,7 @@ export default function AiBadge({
     if (checkedAt) {
         return (
             <span className={`${BASE} bg-gray-100 text-gray-600`}>
-        Texto insuficiente para analizar
+        {t.ai.insufficient}
       </span>
         );
     }
@@ -77,7 +81,7 @@ export default function AiBadge({
                 disabled={loading}
                 className={`${BASE} border border-gray-300 text-gray-700 hover:bg-gray-100 disabled:opacity-50`}
             >
-                {loading ? "Analizando..." : "Analizar contenido IA"}
+                {loading ? t.ai.analyzing : t.ai.analyze}
             </button>
             {error && <span className="text-xs text-red-600">{error}</span>}
         </div>

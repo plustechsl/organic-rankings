@@ -5,6 +5,7 @@ from app.models.link import Link
 from app.models.link_request import LinkRequest
 from app.models.tag import Tag
 from app.models.link_tag import LinkTag
+from app.models.translation import Translation
 from app.models.user_expertise import UserExpertise
 from app.models.vote import Vote
 from app.models.user_reputation import UserReputation
@@ -18,6 +19,7 @@ __all__ = [
     "LinkRequest",
     "Tag",
     "LinkTag",
+    "Translation",
     "UserExpertise",
     "Vote",
     "UserReputation",

@@ -11,6 +11,7 @@ from app.models.link_tag import LinkTag
 from app.models.tag import Tag
 from app.models.user import User
 from app.schemas.tag import LinkTagsAttach
+from app.translations import delete_entity_translations
 from app.utils import slugify
 
 
@@ -130,6 +131,8 @@ def delete_tag(
             status_code=404,
             detail="Tag not found",
         )
+
+    delete_entity_translations(db, "tag", tag_id)
 
     db.delete(tag)
     db.commit()

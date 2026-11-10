@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import delete, or_, select
 from sqlalchemy.orm import Session
 
+from app.config import TRANSLATION_LANGS
 from app.database import get_db
 from app.dependencies import require_admin
 from app.models.category import Category
@@ -9,9 +10,15 @@ from app.models.link import Link
 from app.models.link_tag import LinkTag
 from app.models.list import LinkList
 from app.models.tag import Tag
+from app.models.translation import Translation
 from app.models.user import User
 from app.models.user_expertise import UserExpertise
 from app.schemas.category import CategoryCreate, CategoryUpdate
+from app.translations import (
+    delete_entity_translations,
+    ensure_translations,
+    get_lang,
+)
 from app.utils import slugify
 
 
@@ -21,10 +28,18 @@ router = APIRouter(
 )
 
 
-def serialize_category(category: Category, tags: list[str]) -> dict:
+def serialize_category(
+    category: Category,
+    tags: list[str],
+    translation: Translation | None = None,
+) -> dict:
     return {
         "id": category.id,
-        "name": category.name,
+        "name": (
+            translation.title
+            if translation and translation.title
+            else category.name
+        ),
         "slug": category.slug,
         "tags": tags,
         "created_at": category.created_at,
@@ -32,9 +47,9 @@ def serialize_category(category: Category, tags: list[str]) -> dict:
     }
 
 
-def get_tags_by_category(db: Session) -> dict[int, list[str]]:
+def get_tag_rows_by_category(db: Session) -> dict[int, list[Tag]]:
     rows = db.execute(
-        select(LinkList.category_id, Tag.name)
+        select(LinkList.category_id, Tag)
         .join(Link, Link.list_id == LinkList.id)
         .join(LinkTag, LinkTag.link_id == Link.id)
         .join(Tag, LinkTag.tag_id == Tag.id)
@@ -42,28 +57,99 @@ def get_tags_by_category(db: Session) -> dict[int, list[str]]:
         .order_by(Tag.name)
     ).all()
 
-    tags: dict[int, list[str]] = {}
+    tags: dict[int, list[Tag]] = {}
 
-    for category_id, name in rows:
-        tags.setdefault(category_id, []).append(name)
+    for category_id, tag in rows:
+        tags.setdefault(category_id, []).append(tag)
 
     return tags
 
 
+def get_tags_by_category(db: Session) -> dict[int, list[str]]:
+    return {
+        category_id: [tag.name for tag in tags]
+        for category_id, tags in get_tag_rows_by_category(db).items()
+    }
+
+
+def _translated_tag_names(
+    tags: list[Tag],
+    translations: dict[int, Translation],
+) -> list[str]:
+    names = []
+
+    for tag in tags:
+        translation = translations.get(tag.id)
+        names.append(
+            translation.title
+            if translation and translation.title
+            else tag.name
+        )
+
+    return names
+
+
+def _translate_category_payload(
+    db: Session,
+    categories: list[Category],
+    tag_rows: dict[int, list[Tag]],
+    lang: str,
+) -> tuple[dict[int, Translation], dict[int, Translation]]:
+    unique_tags: dict[int, Tag] = {}
+
+    for tags in tag_rows.values():
+        for tag in tags:
+            unique_tags[tag.id] = tag
+
+    category_translations = ensure_translations(
+        db,
+        "category",
+        categories,
+        lang,
+        get_title=lambda category: category.name,
+    )
+
+    tag_translations = ensure_translations(
+        db,
+        "tag",
+        list(unique_tags.values()),
+        lang,
+        get_title=lambda tag: tag.name,
+    )
+
+    return category_translations, tag_translations
+
+
 @router.get("")
 def list_categories(
+    lang: str | None = Depends(get_lang),
     db: Session = Depends(get_db),
 ):
     categories = db.scalars(
         select(Category).order_by(Category.name)
     ).all()
 
-    tags_by_category = get_tags_by_category(db)
+    tag_rows = get_tag_rows_by_category(db)
+
+    category_translations = {}
+    tag_translations = {}
+
+    if lang:
+        category_translations, tag_translations = _translate_category_payload(
+            db,
+            categories,
+            tag_rows,
+            lang,
+        )
 
     return [
         serialize_category(
             category,
-            tags=tags_by_category.get(category.id, []),
+            tags=_translated_tag_names(
+                tag_rows.get(category.id, []),
+                tag_translations,
+            ),
+            translation=category_translations.get(category.id),
         )
         for category in categories
     ]
@@ -72,6 +158,7 @@ def list_categories(
 @router.get("/{category_id}")
 def get_category(
     category_id: int,
+    lang: str | None = Depends(get_lang),
     db: Session = Depends(get_db),
 ):
     category = db.scalar(
@@ -84,9 +171,26 @@ def get_category(
             detail="Category not found",
         )
 
+    tag_rows = get_tag_rows_by_category(db)
+
+    category_translations = {}
+    tag_translations = {}
+
+    if lang:
+        category_translations, tag_translations = _translate_category_payload(
+            db,
+            [category],
+            tag_rows,
+            lang,
+        )
+
     return serialize_category(
         category,
-        tags=get_tags_by_category(db).get(category.id, []),
+        tags=_translated_tag_names(
+            tag_rows.get(category.id, []),
+            tag_translations,
+        ),
+        translation=category_translations.get(category.id),
     )
 
 
@@ -123,7 +227,25 @@ def create_category(
     db.commit()
     db.refresh(category)
 
+    _auto_translate_category(db, category)
+
     return serialize_category(category, tags=[])
+
+
+def _auto_translate_category(db: Session, category: Category) -> None:
+    from app.translate import translation_enabled
+
+    if not translation_enabled():
+        return
+
+    for lang in TRANSLATION_LANGS:
+        ensure_translations(
+            db,
+            "category",
+            [category],
+            lang,
+            get_title=lambda c: c.name,
+        )
 
 
 @router.patch("/{category_id}")
@@ -145,6 +267,13 @@ def update_category(
 
     if payload.name is not None:
         category.name = payload.name
+
+        db.execute(
+            delete(Translation).where(
+                Translation.entity_type == "category",
+                Translation.entity_id == category.id,
+            )
+        )
 
     if payload.slug is not None:
         new_slug = slugify(payload.slug)
@@ -258,6 +387,8 @@ def delete_category(
     db.execute(
         delete(UserExpertise).where(UserExpertise.category_id == category_id)
     )
+
+    delete_entity_translations(db, "category", category_id)
 
     db.delete(category)
     db.commit()
