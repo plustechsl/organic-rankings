@@ -31,6 +31,8 @@ services:
       timeout: 3s
       retries: 5
 
+  
+
   api:
     build:
       context: ./api
@@ -53,6 +55,7 @@ services:
       ACCESS_TOKEN_EXPIRE_MINUTES: ${ACCESS_TOKEN_EXPIRE_MINUTES:-43200}
 
       TURNSTILE_SECRET_KEY: ${TURNSTILE_SECRET_KEY:-}
+
     depends_on:
       postgres:
         condition: service_healthy

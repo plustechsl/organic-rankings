@@ -2,12 +2,15 @@
 
 import { useEffect, useState } from "react";
 import { Ad, pickAd } from "@/app/lib/ads";
+import { useLang } from "@/app/lib/lang";
 
 type Props = {
   themeSlug?: string | null;
 };
 
 export default function AdSlot({ themeSlug }: Props) {
+  const { t } = useLang();
+
   const [ad, setAd] = useState<Ad | null>(null);
 
   useEffect(() => {
@@ -18,9 +21,9 @@ export default function AdSlot({ themeSlug }: Props) {
     <div className="w-full rounded-lg border border-gray-300 bg-white p-2 shadow-sm">
       <div className="mb-1 flex items-center justify-between">
         <p className="text-[10px] uppercase tracking-[0.2em] text-gray-400">
-          Publicidad
+          {t.ad.label}
         </p>
-        <span className="text-[10px] text-gray-400">Ad</span>
+        <span className="text-[10px] text-gray-400">{t.ad.tag}</span>
       </div>
       <div className="flex min-h-[250px] items-center justify-center rounded-md bg-gray-50">
         {ad ? (
@@ -28,7 +31,7 @@ export default function AdSlot({ themeSlug }: Props) {
             {ad.iframeSrc ? (
               <iframe
                 src={ad.iframeSrc}
-                title={ad.alt || ad.title || "Publicidad"}
+                title={ad.alt || ad.title || t.ad.label}
                 className="h-[250px] w-full rounded-md border-0"
                 sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
               />
@@ -41,7 +44,7 @@ export default function AdSlot({ themeSlug }: Props) {
               >
                 <img
                   src={ad.imageUrl}
-                  alt={ad.alt || ad.title || "Publicidad"}
+                  alt={ad.alt || ad.title || t.ad.label}
                   className="h-[250px] w-full rounded-md object-cover"
                 />
               </a>
@@ -58,7 +61,7 @@ export default function AdSlot({ themeSlug }: Props) {
             )}
           </>
         ) : (
-          <p className="text-center text-xs text-gray-400">Espacio publicitario</p>
+          <p className="text-center text-xs text-gray-400">{t.ad.empty}</p>
         )}
       </div>
     </div>

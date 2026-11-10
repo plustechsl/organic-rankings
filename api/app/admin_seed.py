@@ -264,6 +264,8 @@ def seed_list(
     db.commit()
     db.refresh(new_list)
 
+    _auto_translate_seed(db, new_list, created_links, tags)
+
     return {
         "id": new_list.id,
         "title": new_list.title,
@@ -273,3 +275,42 @@ def seed_list(
         "links_created": len(created_links),
         "tags": [t.name for t in tags],
     }
+
+
+def _auto_translate_seed(
+    db: Session,
+    new_list: LinkList,
+    created_links: list[Link],
+    tags: list[Tag],
+) -> None:
+    from app.config import TRANSLATION_LANGS
+    from app.translate import translation_enabled
+    from app.translations import ensure_translations
+
+    if not translation_enabled():
+        return
+
+    for lang in TRANSLATION_LANGS:
+        ensure_translations(
+            db,
+            "list",
+            [new_list],
+            lang,
+            get_title=lambda l: l.title,
+            get_description=lambda l: l.description,
+        )
+        ensure_translations(
+            db,
+            "link",
+            created_links,
+            lang,
+            get_title=lambda l: l.title,
+            get_description=lambda l: l.description,
+        )
+        ensure_translations(
+            db,
+            "tag",
+            tags,
+            lang,
+            get_title=lambda t: t.name,
+        )

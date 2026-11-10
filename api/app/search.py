@@ -1,15 +1,18 @@
 import unicodedata
 
 from fastapi import APIRouter, Depends, Query
-from sqlalchemy import func, or_, select, text
+from sqlalchemy import and_, func, or_, select, text
 from sqlalchemy.orm import Session, aliased
 
+from app.config import TRANSLATION_LANGS
 from app.database import engine, get_db
 from app.models.category import Category
 from app.models.link import Link
 from app.models.link_tag import LinkTag
 from app.models.list import LinkList
 from app.models.tag import Tag
+from app.models.translation import Translation
+from app.translations import ensure_translations, get_lang
 from app.utils import slugify
 
 
@@ -30,13 +33,42 @@ def _normalize(value: str) -> str:
     )
 
 
-def _haystack():
-    return func.concat_ws(
-        " ",
+def _haystack(link_translation=None, list_translation=None):
+    parts = [
         func.f_unaccent(func.lower(Link.title)),
         func.f_unaccent(func.lower(Link.description)),
         func.f_unaccent(func.lower(LinkList.title)),
-    )
+    ]
+
+    if link_translation is not None:
+        parts.append(
+            func.coalesce(
+                func.f_unaccent(func.lower(link_translation.title)),
+                "",
+            )
+        )
+        parts.append(
+            func.coalesce(
+                func.f_unaccent(func.lower(link_translation.description)),
+                "",
+            )
+        )
+
+    if list_translation is not None:
+        parts.append(
+            func.coalesce(
+                func.f_unaccent(func.lower(list_translation.title)),
+                "",
+            )
+        )
+        parts.append(
+            func.coalesce(
+                func.f_unaccent(func.lower(list_translation.description)),
+                "",
+            )
+        )
+
+    return func.concat_ws(" ", *parts)
 
 
 def ensure_search_ready() -> None:
@@ -85,15 +117,22 @@ def search(
     ),
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=20, ge=1, le=100),
+    lang: str | None = Depends(get_lang),
     db: Session = Depends(get_db),
 ):
     category_alias = aliased(Category)
+    link_translation = aliased(Translation)
+    list_translation = aliased(Translation)
+    category_translation = aliased(Translation)
 
     conditions = []
 
-    if q:
-        haystack = _haystack()
+    haystack = _haystack(
+        link_translation if lang else None,
+        list_translation if lang else None,
+    )
 
+    if q:
         for raw_word in q.split():
             word = _normalize(raw_word)
 
@@ -119,9 +158,28 @@ def search(
 
     if category:
         normalized = _normalize(category)
+        matching_categories = (
+            select(Category.id)
+            .outerjoin(
+                category_translation,
+                and_(
+                    category_translation.entity_type == "category",
+                    category_translation.entity_id == Category.id,
+                ),
+            )
+            .where(
+                or_(
+                    func.f_unaccent(func.lower(Category.name))
+                    == normalized,
+                    func.f_unaccent(
+                        func.lower(category_translation.title)
+                    )
+                    == normalized,
+                )
+            )
+        )
         conditions.append(
-            func.f_unaccent(func.lower(category_alias.name))
-            == normalized
+            category_alias.id.in_(matching_categories)
         )
 
     base_query = (
@@ -133,6 +191,23 @@ def search(
         )
         .where(*conditions)
     )
+
+    if lang:
+        base_query = base_query.outerjoin(
+            link_translation,
+            and_(
+                link_translation.entity_type == "link",
+                link_translation.entity_id == Link.id,
+                link_translation.lang == lang,
+            ),
+        ).outerjoin(
+            list_translation,
+            and_(
+                list_translation.entity_type == "list",
+                list_translation.entity_id == LinkList.id,
+                list_translation.lang == lang,
+            ),
+        )
 
     if tag:
         base_query = (
@@ -157,33 +232,115 @@ def search(
         base_query.offset((page - 1) * page_size).limit(page_size)
     ).all()
 
+    links = [link for link, *_ in rows]
+    categories = list(
+        {
+            category.id: category
+            for _, _, category in rows
+            if category
+        }.values()
+    )
+
+    link_translations = {}
+    category_translations = {}
+
+    if lang and (links or categories):
+        link_translations = ensure_translations(
+            db,
+            "link",
+            links,
+            lang,
+            get_title=lambda link: link.title,
+            get_description=lambda link: link.description,
+        )
+        category_translations = ensure_translations(
+            db,
+            "category",
+            categories,
+            lang,
+            get_title=lambda category: category.name,
+        )
+
     tags_by_link: dict[int, list[str]] = {}
-    link_ids = [link.id for link, *_ in rows]
+    tag_translations = {}
+    link_ids = [link.id for link in links]
 
     if link_ids:
         tag_rows = db.execute(
-            select(LinkTag.link_id, Tag.name)
+            select(LinkTag.link_id, Tag)
             .join(Tag, LinkTag.tag_id == Tag.id)
             .where(LinkTag.link_id.in_(link_ids))
             .order_by(Tag.name)
         )
 
-        for link_id, tag_name in tag_rows:
-            tags_by_link.setdefault(link_id, []).append(tag_name)
+        grouped: dict[int, list[Tag]] = {}
+
+        for link_id, tag in tag_rows:
+            grouped.setdefault(link_id, []).append(tag)
+
+        if lang:
+            unique_tags = {
+                tag.id: tag
+                for tags in grouped.values()
+                for tag in tags
+            }
+
+            tag_translations = ensure_translations(
+                db,
+                "tag",
+                list(unique_tags.values()),
+                lang,
+                get_title=lambda tag: tag.name,
+            )
+
+            tags_by_link = {
+                link_id: [
+                    tag_translations[tag.id].title
+                    if tag.id in tag_translations
+                    and tag_translations[tag.id].title
+                    else tag.name
+                    for tag in tags
+                ]
+                for link_id, tags in grouped.items()
+            }
+        else:
+            tags_by_link = {
+                link_id: [tag.name for tag in tags]
+                for link_id, tags in grouped.items()
+            }
 
     results = [
         {
             "id": link.id,
-            "title": link.title,
+            "title": (
+                link_translations[link.id].title
+                if lang
+                and link.id in link_translations
+                and link_translations[link.id].title
+                else link.title
+            ),
             "url": link.url,
-            "description": link.description,
+            "description": (
+                link_translations[link.id].description
+                if lang
+                and link.id in link_translations
+                and link_translations[link.id].description
+                else link.description
+            ),
             "points": link.points,
             "sensitivity": link.sensitivity,
             "created_at": link.created_at,
             "list_id": link_list.id,
             "list_title": link_list.title,
             "category_id": category.id if category else None,
-            "category_name": category.name if category else None,
+            "category_name": (
+                category_translations[category.id].title
+                if lang
+                and category
+                and category.id in category_translations
+                and category_translations[category.id].title
+                else category.name if category else None
+            ),
             "tags": tags_by_link.get(link.id, []),
         }
         for link, link_list, category in rows

@@ -92,6 +92,13 @@ TURNSTILE_VERIFY_URL = getenv(
 TURNSTILE_TIMEOUT = int(getenv("TURNSTILE_TIMEOUT", "5"))
 
 # =============================================================================
+# Traducciones automáticas
+# =============================================================================
+
+# Idiomas objetivo además del castellano (idioma fuente de los datos).
+TRANSLATION_LANGS = ("en", "ca")
+
+# =============================================================================
 # Authentication
 # =============================================================================
 

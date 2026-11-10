@@ -1,14 +1,21 @@
 from fastapi import APIRouter, Depends, HTTPException, Request
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from sqlalchemy.orm import Session, joinedload, selectinload
 
+from app.config import TRANSLATION_LANGS
 from app.database import get_db
 from app.dependencies import get_current_user
 from app.ratelimit import limit_creation
 from app.models.category import Category
 from app.models.list import LinkList
+from app.models.translation import Translation
 from app.models.user import User
 from app.schemas.list import ListCreate, ListUpdate
+from app.translations import (
+    delete_entity_translations,
+    ensure_translations,
+    get_lang,
+)
 from app.utils import slugify
 
 
@@ -18,14 +25,25 @@ router = APIRouter(
 )
 
 
-def serialize_list(link_list: LinkList) -> dict:
+def serialize_list(
+    link_list: LinkList,
+    translation: Translation | None = None,
+) -> dict:
     return {
         "id": link_list.id,
         "user_id": link_list.user_id,
         "username": link_list.user.username if link_list.user else None,
-        "title": link_list.title,
+        "title": (
+            translation.title
+            if translation and translation.title
+            else link_list.title
+        ),
         "slug": link_list.slug,
-        "description": link_list.description,
+        "description": (
+            translation.description
+            if translation and translation.description
+            else link_list.description
+        ),
         "image_url": link_list.image_url,
         "points": sum(link.points for link in link_list.links),
         "category_id": link_list.category_id,
@@ -78,20 +96,46 @@ def validate_category(
 
 @router.get("")
 def list_lists(
+    slug: str | None = None,
+    lang: str | None = Depends(get_lang),
     db: Session = Depends(get_db),
 ):
-    lists = db.scalars(
+    query = (
         select(LinkList)
         .options(joinedload(LinkList.user), selectinload(LinkList.links))
         .order_by(LinkList.created_at.desc())
-    ).all()
+    )
 
-    return [serialize_list(link_list) for link_list in lists]
+    if slug:
+        query = query.where(LinkList.slug == slug)
+
+    lists = db.scalars(query).all()
+
+    translations = {}
+
+    if lang:
+        translations = ensure_translations(
+            db,
+            "list",
+            lists,
+            lang,
+            get_title=lambda link_list: link_list.title,
+            get_description=lambda link_list: link_list.description,
+        )
+
+    return [
+        serialize_list(
+            link_list,
+            translation=translations.get(link_list.id),
+        )
+        for link_list in lists
+    ]
 
 
 @router.get("/{list_id}")
 def get_list(
     list_id: int,
+    lang: str | None = Depends(get_lang),
     db: Session = Depends(get_db),
 ):
     link_list = db.scalar(
@@ -106,7 +150,20 @@ def get_list(
             detail="List not found",
         )
 
-    return serialize_list(link_list)
+    translation = None
+
+    if lang:
+        translations = ensure_translations(
+            db,
+            "list",
+            [link_list],
+            lang,
+            get_title=lambda l: l.title,
+            get_description=lambda l: l.description,
+        )
+        translation = translations.get(link_list.id)
+
+    return serialize_list(link_list, translation=translation)
 
 
 @router.post("", status_code=201)
@@ -151,7 +208,26 @@ def create_list(
     db.commit()
     db.refresh(link_list)
 
+    _auto_translate_list(db, link_list)
+
     return serialize_list(link_list)
+
+
+def _auto_translate_list(db: Session, link_list: LinkList) -> None:
+    from app.translate import translation_enabled
+
+    if not translation_enabled():
+        return
+
+    for lang in TRANSLATION_LANGS:
+        ensure_translations(
+            db,
+            "list",
+            [link_list],
+            lang,
+            get_title=lambda l: l.title,
+            get_description=lambda l: l.description,
+        )
 
 
 @router.patch("/{list_id}")
@@ -199,6 +275,14 @@ def update_list(
     if payload.image_url is not None:
         link_list.image_url = payload.image_url
 
+    if payload.title is not None or payload.description is not None:
+        db.execute(
+            delete(Translation).where(
+                Translation.entity_type == "list",
+                Translation.entity_id == link_list.id,
+            )
+        )
+
     db.commit()
     db.refresh(link_list)
 
@@ -212,6 +296,8 @@ def delete_list(
     db: Session = Depends(get_db),
 ):
     link_list = get_owned_list_or_403(list_id, current_user, db)
+
+    delete_entity_translations(db, "list", link_list.id)
 
     db.delete(link_list)
     db.commit()

@@ -3,11 +3,12 @@ import unicodedata
 from datetime import datetime, timedelta
 
 from fastapi import APIRouter, Depends, HTTPException, Request
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from sqlalchemy.orm import Session, joinedload
 
 from app.ai_detect import analyze_text
 from app.categories import get_tags_by_category
+from app.config import TRANSLATION_LANGS
 from app.database import get_db
 from app.dependencies import get_current_user
 from app.page_fetch import fetch_page_metadata, fetch_page_text
@@ -16,9 +17,15 @@ from app.sensitivity_detect import detect_sensitivity
 from app.models.link import Link
 from app.models.link_tag import LinkTag
 from app.models.list import LinkList
+from app.models.translation import Translation
 from app.models.user import User
 from app.schemas.link import LinkCreate, LinkPreviewRequest, LinkUpdate
 from app.tags import get_or_create_tag
+from app.translations import (
+    delete_entity_translations,
+    ensure_translations,
+    get_lang,
+)
 
 
 AI_CHECK_TTL = timedelta(days=1)
@@ -30,15 +37,26 @@ router = APIRouter(
 )
 
 
-def serialize_link(link: Link) -> dict:
+def serialize_link(
+    link: Link,
+    translation: Translation | None = None,
+) -> dict:
     return {
         "id": link.id,
         "list_id": link.list_id,
         "user_id": link.user_id,
         "username": link.user.username if link.user else None,
-        "title": link.title,
+        "title": (
+            translation.title
+            if translation and translation.title
+            else link.title
+        ),
         "url": link.url,
-        "description": link.description,
+        "description": (
+            translation.description
+            if translation and translation.description
+            else link.description
+        ),
         "image_url": link.image_url,
         "points": link.points,
         "sensitivity": link.sensitivity,
@@ -179,6 +197,7 @@ def preview_link(
 @router.get("")
 def list_links(
     list_id: int | None = None,
+    lang: str | None = Depends(get_lang),
     db: Session = Depends(get_db),
 ):
     query = (
@@ -192,12 +211,28 @@ def list_links(
 
     links = db.scalars(query).all()
 
-    return [serialize_link(link) for link in links]
+    translations = {}
+
+    if lang:
+        translations = ensure_translations(
+            db,
+            "link",
+            links,
+            lang,
+            get_title=lambda link: link.title,
+            get_description=lambda link: link.description,
+        )
+
+    return [
+        serialize_link(link, translation=translations.get(link.id))
+        for link in links
+    ]
 
 
 @router.get("/{link_id}")
 def get_link(
     link_id: int,
+    lang: str | None = Depends(get_lang),
     db: Session = Depends(get_db),
 ):
     link = db.scalar(
@@ -212,7 +247,20 @@ def get_link(
             detail="Link not found",
         )
 
-    return serialize_link(link)
+    translation = None
+
+    if lang:
+        translations = ensure_translations(
+            db,
+            "link",
+            [link],
+            lang,
+            get_title=lambda l: l.title,
+            get_description=lambda l: l.description,
+        )
+        translation = translations.get(link.id)
+
+    return serialize_link(link, translation=translation)
 
 
 @router.post("", status_code=201)
@@ -254,7 +302,26 @@ def create_link(
     db.commit()
     db.refresh(link)
 
+    _auto_translate_link(db, link)
+
     return serialize_link(link)
+
+
+def _auto_translate_link(db: Session, link: Link) -> None:
+    from app.translate import translation_enabled
+
+    if not translation_enabled():
+        return
+
+    for lang in TRANSLATION_LANGS:
+        ensure_translations(
+            db,
+            "link",
+            [link],
+            lang,
+            get_title=lambda l: l.title,
+            get_description=lambda l: l.description,
+        )
 
 
 @router.patch("/{link_id}")
@@ -295,6 +362,14 @@ def update_link(
     if payload.image_url is not None:
         link.image_url = payload.image_url
 
+    if payload.title is not None or payload.description is not None:
+        db.execute(
+            delete(Translation).where(
+                Translation.entity_type == "link",
+                Translation.entity_id == link.id,
+            )
+        )
+
     if payload.sensitivity is not None:
         if current_user.role not in {"admin", "moderator"}:
             raise HTTPException(
@@ -330,6 +405,8 @@ def delete_link(
             status_code=403,
             detail="You do not have permission to delete this link",
         )
+
+    delete_entity_translations(db, "link", link.id)
 
     db.delete(link)
     db.commit()
