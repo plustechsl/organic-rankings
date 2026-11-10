@@ -31,22 +31,7 @@ services:
       timeout: 3s
       retries: 5
 
-  libretranslate:
-    # Motor de traducción automática (self-hosted, los textos no salen
-    # del servidor). La API lo usa con fallo-abierto: si no responde,
-    # se sirve el texto original y se reintenta en la próxima lectura.
-    image: libretranslate/libretranslate
-
-    environment:
-      LT_DISABLE_WEB_UI: "1"
-    restart: unless-stopped
-
-    healthcheck:
-      test: [ "CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:5000/languages', timeout=3)\"" ]
-      interval: 30s
-      timeout: 10s
-      retries: 5
-      start_period: 60s
+  
 
   api:
     build:
@@ -71,13 +56,6 @@ services:
 
       TURNSTILE_SECRET_KEY: ${TURNSTILE_SECRET_KEY:-}
 
-      TRANSLATE_PROVIDER: ${TRANSLATE_PROVIDER:-libretranslate}
-      LIBRETRANSLATE_URL: http://libretranslate:5000
-      LIBRETRANSLATE_API_KEY: ${LIBRETRANSLATE_API_KEY:-}
-      TRANSLATE_TIMEOUT: ${TRANSLATE_TIMEOUT:-10}
-    # libretranslate no está en depends_on a propósito: su primer arranque
-    # descarga los modelos y puede tardar minutos; la API es fallo-abierto
-    # (sirve el original y reintenta) y no debe bloquearse esperándolo.
     depends_on:
       postgres:
         condition: service_healthy

@@ -111,7 +111,7 @@ def ensure_translations(
 
     translated = translate_texts(texts, lang)
 
-    if translated is None:
+    if translated is None or len(translated) != len(texts):
         return by_id
 
     index = 0
@@ -128,6 +128,9 @@ def ensure_translations(
             if description:
                 new_description = translated[index]
                 index += 1
+
+        if not new_title:
+            continue
 
         row = by_id.get(item.id)
 

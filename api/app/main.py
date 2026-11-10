@@ -119,7 +119,7 @@ ensure_schema_updates()
 
 ensure_search_ready()
 
-run_translation_backfill()
+# run_translation_backfill()
 
 
 app = FastAPI(

@@ -96,14 +96,20 @@ def validate_category(
 
 @router.get("")
 def list_lists(
+    slug: str | None = None,
     lang: str | None = Depends(get_lang),
     db: Session = Depends(get_db),
 ):
-    lists = db.scalars(
+    query = (
         select(LinkList)
         .options(joinedload(LinkList.user), selectinload(LinkList.links))
         .order_by(LinkList.created_at.desc())
-    ).all()
+    )
+
+    if slug:
+        query = query.where(LinkList.slug == slug)
+
+    lists = db.scalars(query).all()
 
     translations = {}
 

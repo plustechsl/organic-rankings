@@ -88,8 +88,11 @@ export default function ListDetailPage() {
     setError(null);
 
     try {
-      const allLists = await api.get<LinkList[]>("/lists", { lang: locale });
-      const found = allLists.find((l) => l.slug === params.slug);
+      const matchingLists = await api.get<LinkList[]>(
+        `/lists?slug=${encodeURIComponent(params.slug)}`,
+        { lang: locale }
+      );
+      const found = matchingLists[0];
 
       if (!found) {
         setError(t.listDetail.notFound);

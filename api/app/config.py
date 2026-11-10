@@ -98,18 +98,6 @@ TURNSTILE_TIMEOUT = int(getenv("TURNSTILE_TIMEOUT", "5"))
 # Idiomas objetivo además del castellano (idioma fuente de los datos).
 TRANSLATION_LANGS = ("en", "ca")
 
-# Proveedor de traducción: "libretranslate" | "none".
-TRANSLATE_PROVIDER = getenv("TRANSLATE_PROVIDER", "libretranslate")
-
-LIBRETRANSLATE_URL = getenv(
-    "LIBRETRANSLATE_URL",
-    "http://libretranslate:5000",
-)
-
-LIBRETRANSLATE_API_KEY = getenv("LIBRETRANSLATE_API_KEY", "")
-
-TRANSLATE_TIMEOUT = int(getenv("TRANSLATE_TIMEOUT", "10"))
-
 # =============================================================================
 # Authentication
 # =============================================================================
