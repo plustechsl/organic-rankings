@@ -1,3 +1,4 @@
+import re
 import unicodedata
 
 from fastapi import APIRouter, Depends, Query
@@ -17,7 +18,7 @@ from app.utils import slugify
 
 
 FUZZY_MIN_WORD_LENGTH = 5
-FUZZY_SIMILARITY_THRESHOLD = 0.4
+FUZZY_SIMILARITY_THRESHOLD = 0.35
 
 
 router = APIRouter(
@@ -71,10 +72,26 @@ def _haystack(link_translation=None, list_translation=None):
     return func.concat_ws(" ", *parts)
 
 
+def _levenshtein_condition(word: str, haystack):
+    max_distance = 2 if len(word) >= 6 else 1
+
+    tokens = func.regexp_split_to_table(
+        haystack, r"[^[:alnum:]]+"
+    ).table_valued("token").render_derived()
+
+    return select(1).where(
+        tokens.c.token != "",
+        func.levenshtein_less_equal(
+            word, tokens.c.token, max_distance
+        ) <= max_distance,
+    ).exists()
+
+
 def ensure_search_ready() -> None:
     with engine.begin() as conn:
         conn.execute(text("CREATE EXTENSION IF NOT EXISTS unaccent"))
         conn.execute(text("CREATE EXTENSION IF NOT EXISTS pg_trgm"))
+        conn.execute(text("CREATE EXTENSION IF NOT EXISTS fuzzystrmatch"))
 
         conn.execute(
             text(
@@ -125,7 +142,10 @@ def search(
     list_translation = aliased(Translation)
     category_translation = aliased(Translation)
 
-    conditions = []
+    exact_conditions = []
+    fuzzy_conditions = []
+    filter_conditions = []
+    fuzzy_enabled = False
 
     haystack = _haystack(
         link_translation if lang else None,
@@ -139,22 +159,23 @@ def search(
             if not word:
                 continue
 
-            escaped = (
-                word.replace("\\", "\\\\")
-                .replace("%", "\\%")
-                .replace("_", "\\_")
-            )
+            exact = haystack.op("~")(r"\m" + re.escape(word))
 
-            condition = haystack.like(f"%{escaped}%", escape="\\")
+            exact_conditions.append(exact)
 
             if len(word) >= FUZZY_MIN_WORD_LENGTH:
-                condition = or_(
-                    condition,
-                    func.word_similarity(word, haystack)
-                    >= FUZZY_SIMILARITY_THRESHOLD,
-                )
+                fuzzy_enabled = True
 
-            conditions.append(condition)
+                fuzzy_conditions.append(
+                    or_(
+                        exact,
+                        func.strict_word_similarity(word, haystack)
+                        >= FUZZY_SIMILARITY_THRESHOLD,
+                        _levenshtein_condition(word, haystack),
+                    )
+                )
+            else:
+                fuzzy_conditions.append(exact)
 
     if category:
         normalized = _normalize(category)
@@ -178,47 +199,59 @@ def search(
                 )
             )
         )
-        conditions.append(
+        filter_conditions.append(
             category_alias.id.in_(matching_categories)
         )
 
-    base_query = (
-        select(Link, LinkList, category_alias)
-        .join(LinkList, Link.list_id == LinkList.id)
-        .join(
-            category_alias,
-            LinkList.category_id == category_alias.id,
-        )
-        .where(*conditions)
-    )
-
-    if lang:
-        base_query = base_query.outerjoin(
-            link_translation,
-            and_(
-                link_translation.entity_type == "link",
-                link_translation.entity_id == Link.id,
-                link_translation.lang == lang,
-            ),
-        ).outerjoin(
-            list_translation,
-            and_(
-                list_translation.entity_type == "list",
-                list_translation.entity_id == LinkList.id,
-                list_translation.lang == lang,
-            ),
+    def build_query(word_conditions):
+        query = (
+            select(Link, LinkList, category_alias)
+            .join(LinkList, Link.list_id == LinkList.id)
+            .join(
+                category_alias,
+                LinkList.category_id == category_alias.id,
+            )
+            .where(*(word_conditions + filter_conditions))
         )
 
-    if tag:
-        base_query = (
-            base_query.join(LinkTag, LinkTag.link_id == Link.id)
-            .join(Tag, LinkTag.tag_id == Tag.id)
-            .where(Tag.slug == slugify(tag))
-        )
+        if lang:
+            query = query.outerjoin(
+                link_translation,
+                and_(
+                    link_translation.entity_type == "link",
+                    link_translation.entity_id == Link.id,
+                    link_translation.lang == lang,
+                ),
+            ).outerjoin(
+                list_translation,
+                and_(
+                    list_translation.entity_type == "list",
+                    list_translation.entity_id == LinkList.id,
+                    list_translation.lang == lang,
+                ),
+            )
+
+        if tag:
+            query = (
+                query.join(LinkTag, LinkTag.link_id == Link.id)
+                .join(Tag, LinkTag.tag_id == Tag.id)
+                .where(Tag.slug == slugify(tag))
+            )
+
+        return query
+
+    base_query = build_query(exact_conditions)
 
     total = db.scalar(
         select(func.count()).select_from(base_query.subquery())
     )
+
+    if total == 0 and fuzzy_enabled:
+        base_query = build_query(fuzzy_conditions)
+
+        total = db.scalar(
+            select(func.count()).select_from(base_query.subquery())
+        )
 
     if sort == "recent":
         base_query = base_query.order_by(Link.created_at.desc())
