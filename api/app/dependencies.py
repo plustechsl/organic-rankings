@@ -109,3 +109,15 @@ def require_admin(
         )
 
     return current_user
+
+
+def require_moderator(
+    current_user: User = Depends(get_current_user),
+):
+    if current_user.role not in {"admin", "moderator"}:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Admin or moderator access required",
+        )
+
+    return current_user

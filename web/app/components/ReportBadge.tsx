@@ -36,7 +36,7 @@ export default function ReportBadge({
     const { t, locale } = useLang();
 
     const [open, setOpen] = useState(false);
-    const [reason, setReason] = useState<ReportReason>("fuente_dudosa");
+    const [reason, setReason] = useState<ReportReason | "">("");
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [done, setDone] = useState(false);
@@ -121,10 +121,13 @@ export default function ReportBadge({
                         id={`report-reason-${linkId}`}
                         value={reason}
                         onChange={(event) =>
-                            setReason(event.target.value as ReportReason)
+                            setReason(event.target.value as ReportReason | "")
                         }
                         className="rounded-full border border-gray-300 bg-white px-2 py-1 text-xs outline-none focus:border-gray-500"
                     >
+                        <option value="" disabled>
+                            {t.report.chooseReason}
+                        </option>
                         {REPORT_REASONS.map((value) => (
                             <option key={value} value={value}>
                                 {t.report.reasons[value]}
@@ -135,7 +138,7 @@ export default function ReportBadge({
                     <button
                         type="button"
                         onClick={handleSubmit}
-                        disabled={loading}
+                        disabled={loading || !reason}
                         className="rounded-full bg-gray-900 px-3 py-1 text-xs font-medium text-white transition hover:bg-gray-700 disabled:opacity-50"
                     >
                         {loading ? t.common.saving : t.report.send}

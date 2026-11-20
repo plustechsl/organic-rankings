@@ -5,7 +5,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session, joinedload
 
 from app.database import get_db
-from app.dependencies import require_admin
+from app.dependencies import require_admin, require_moderator
 from app.models.link import Link
 from app.models.link_report import LinkReport
 from app.models.list import LinkList
@@ -298,7 +298,7 @@ def change_user_status(
 
 @router.get("/reports")
 def list_reports(
-    current_user: User = Depends(require_admin),
+    current_user: User = Depends(require_moderator),
     db: Session = Depends(get_db),
 ):
     rows = db.execute(
@@ -369,7 +369,7 @@ def list_reports(
 def resolve_reports(
     link_id: int,
     verdict: str,
-    current_user: User = Depends(require_admin),
+    current_user: User = Depends(require_moderator),
     db: Session = Depends(get_db),
 ):
     if verdict not in (*VERIFICATION_STATUSES, "none"):

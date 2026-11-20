@@ -68,6 +68,7 @@ export default function AdminPage() {
   const { t, locale, path } = useLang();
 
   const [allowed, setAllowed] = useState<boolean | null>(null);
+  const [isAdmin, setIsAdmin] = useState(false);
   const [filter, setFilter] = useState<InvitationFilter>("pending");
   const [invitations, setInvitations] = useState<AdminInvitation[]>([]);
   const [loading, setLoading] = useState(true);
@@ -109,12 +110,13 @@ export default function AdminPage() {
       try {
         const me = await api.get<CurrentUser>("/auth/me");
 
-        if (me.role !== "admin") {
+        if (me.role !== "admin" && me.role !== "moderator") {
           setAllowed(false);
           setLoading(false);
           return;
         }
 
+        setIsAdmin(me.role === "admin");
         setAllowed(true);
       } catch {
         setError(t.admin.errorAccount);
@@ -127,7 +129,7 @@ export default function AdminPage() {
   }, [router, locale]);
 
   useEffect(() => {
-    if (allowed !== true) {
+    if (allowed !== true || !isAdmin) {
       return;
     }
 
@@ -155,7 +157,7 @@ export default function AdminPage() {
 
     loadInvitations();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [allowed, filter, locale]);
+  }, [allowed, isAdmin, filter, locale]);
 
   async function handleReview(invitationId: number, action: "approve" | "reject") {
     setActingId(invitationId);
@@ -185,13 +187,13 @@ export default function AdminPage() {
   }
 
   useEffect(() => {
-    if (allowed !== true) {
+    if (allowed !== true || !isAdmin) {
       return;
     }
 
     loadCategories();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [allowed, locale]);
+  }, [allowed, isAdmin, locale]);
 
   async function loadCategories() {
     try {
@@ -334,6 +336,8 @@ export default function AdminPage() {
 
         {allowed === true && (
           <>
+            {isAdmin && (
+              <>
             <div className="mb-4 flex gap-2">
               <button
                 type="button"
@@ -434,6 +438,8 @@ export default function AdminPage() {
                   </div>
                 ))}
               </div>
+            )}
+              </>
             )}
 
             <h2 className="mb-1 mt-12 text-lg font-semibold">
@@ -546,6 +552,8 @@ export default function AdminPage() {
               </div>
             )}
 
+            {isAdmin && (
+              <>
             <h2 className="mb-1 mt-12 text-lg font-semibold">
               {t.admin.categoriesTitle}
             </h2>
@@ -613,6 +621,8 @@ export default function AdminPage() {
                   />
                 ))}
               </div>
+            )}
+              </>
             )}
           </>
         )}

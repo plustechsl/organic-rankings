@@ -326,6 +326,7 @@ const es = {
     button: "Reportar",
     openTitle: "Reportar enlace",
     reasonLabel: "Motivo",
+    chooseReason: "Elige un motivo",
     reasons: {
       sin_fecha: "Sin fecha",
       sin_autor: "Sin autor",
@@ -687,6 +688,7 @@ const en: Dictionary = {
     button: "Report",
     openTitle: "Report link",
     reasonLabel: "Reason",
+    chooseReason: "Choose a reason",
     reasons: {
       sin_fecha: "No date",
       sin_autor: "No author",
@@ -1047,6 +1049,7 @@ const ca: Dictionary = {
     button: "Reportar",
     openTitle: "Reportar enllaç",
     reasonLabel: "Motiu",
+    chooseReason: "Tria un motiu",
     reasons: {
       sin_fecha: "Sense data",
       sin_autor: "Sense autor",
