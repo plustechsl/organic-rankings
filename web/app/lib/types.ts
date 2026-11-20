@@ -66,6 +66,23 @@ export type AdminInvitation = {
 
 export type Sensitivity = "none" | "adult" | "violence";
 
+export type VerificationStatus = "fiable" | "dudoso";
+
+export type ReportReason =
+  | "sin_fecha"
+  | "sin_autor"
+  | "fuente_dudosa"
+  | "datos_contradictorios"
+  | "otro";
+
+export const REPORT_REASONS: ReportReason[] = [
+  "sin_fecha",
+  "sin_autor",
+  "fuente_dudosa",
+  "datos_contradictorios",
+  "otro",
+];
+
 export type Link = {
   id: number;
   list_id: number;
@@ -79,8 +96,37 @@ export type Link = {
   sensitivity: Sensitivity;
   ai_score: number | null;
   ai_checked_at: string | null;
+  report_count: number;
+  verification_status: VerificationStatus | null;
+  verified_at: string | null;
+  verified_by: string | null;
   created_at: string;
   updated_at: string;
+};
+
+export type ReportResponse = {
+  link_id: number;
+  reason: ReportReason;
+  report_count: number;
+};
+
+export type ReportDetail = {
+  id: number;
+  user_id: number;
+  username: string | null;
+  reason: ReportReason;
+  created_at: string;
+};
+
+export type AdminLinkReport = {
+  link_id: number;
+  title: string;
+  url: string;
+  report_count: number;
+  last_reported_at: string;
+  verification_status: VerificationStatus | null;
+  verified_at: string | null;
+  reports: ReportDetail[];
 };
 
 export type Tag = {

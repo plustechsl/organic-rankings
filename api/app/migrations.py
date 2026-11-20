@@ -19,6 +19,21 @@ COLUMNS = (
         "ai_checked_at",
         "TIMESTAMP",
     ),
+    (
+        "links",
+        "verification_status",
+        "VARCHAR(20)",
+    ),
+    (
+        "links",
+        "verified_by_id",
+        "INTEGER",
+    ),
+    (
+        "links",
+        "verified_at",
+        "TIMESTAMP",
+    ),
 )
 
 

@@ -8,6 +8,7 @@ import Navbar from "@/app/components/Navbar";
 import Logo from "@/app/components/Logo";
 import AdSlot from "@/app/components/AdSlot";
 import SensitivityBadge from "@/app/components/SensitivityBadge";
+import ReportBadge from "@/app/components/ReportBadge";
 import { api, getToken, ApiRequestError } from "@/app/lib/api";
 import { useLang } from "@/app/lib/lang";
 import { DATE_LOCALES, format } from "@/app/lib/i18n";
@@ -16,6 +17,7 @@ import {
   Link as LinkType,
   LinkPreview,
   LinkRequest,
+  ReportResponse,
   Sensitivity,
   Tag,
 } from "@/app/lib/types";
@@ -1047,6 +1049,26 @@ export default function ListDetailPage() {
                                         )
                                     )
                                 }
+                            />
+                          </div>
+
+                          <div className="mt-2">
+                            <ReportBadge
+                              linkId={link.id}
+                              reportCount={link.report_count}
+                              verificationStatus={link.verification_status}
+                              verifiedAt={link.verified_at}
+                              verifiedBy={link.verified_by}
+                              canReport={!!currentUser}
+                              onResult={(result) =>
+                                setLinks((prev) =>
+                                  prev.map((l) =>
+                                    l.id === result.link_id
+                                      ? { ...l, report_count: result.report_count }
+                                      : l
+                                  )
+                                )
+                              }
                             />
                           </div>
 

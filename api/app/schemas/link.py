@@ -96,3 +96,26 @@ class LinkUpdate(BaseModel):
     description: str | None = None
     image_url: str | None = None
     sensitivity: Sensitivity | None = None
+
+
+ReportReason = Literal[
+    "sin_fecha",
+    "sin_autor",
+    "fuente_dudosa",
+    "datos_contradictorios",
+    "otro",
+]
+
+REPORT_REASONS = (
+    "sin_fecha",
+    "sin_autor",
+    "fuente_dudosa",
+    "datos_contradictorios",
+    "otro",
+)
+
+VERIFICATION_STATUSES = ("fiable", "dudoso")
+
+
+class LinkReportCreate(BaseModel):
+    reason: ReportReason

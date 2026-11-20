@@ -63,6 +63,21 @@ class Link(Base):
         nullable=True,
     )
 
+    verification_status: Mapped[str | None] = mapped_column(
+        String(20),
+        nullable=True,
+    )
+
+    verified_by_id: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id"),
+        nullable=True,
+    )
+
+    verified_at: Mapped[datetime | None] = mapped_column(
+        DateTime,
+        nullable=True,
+    )
+
     created_at: Mapped[datetime] = mapped_column(
         DateTime,
         default=datetime.utcnow,
@@ -84,7 +99,13 @@ class Link(Base):
 
     user = relationship(
         "User",
+        foreign_keys=[user_id],
         backref="links",
+    )
+
+    verifier = relationship(
+        "User",
+        foreign_keys=[verified_by_id],
     )
 
     tag_relations = relationship(

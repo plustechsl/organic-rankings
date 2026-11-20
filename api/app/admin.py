@@ -1,14 +1,17 @@
 from datetime import datetime
 
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session, joinedload
 
 from app.database import get_db
 from app.dependencies import require_admin
+from app.models.link import Link
+from app.models.link_report import LinkReport
 from app.models.list import LinkList
 from app.models.referral import Invitation
 from app.models.user import User
+from app.schemas.link import VERIFICATION_STATUSES
 
 
 router = APIRouter(
@@ -290,4 +293,111 @@ def change_user_status(
         "email": user.email,
         "role": user.role,
         "is_active": user.is_active,
+    }
+
+
+@router.get("/reports")
+def list_reports(
+    current_user: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    rows = db.execute(
+        select(
+            Link.id,
+            Link.title,
+            Link.url,
+            Link.verification_status,
+            Link.verified_at,
+            func.count(LinkReport.id).label("report_count"),
+            func.max(LinkReport.created_at).label("last_reported_at"),
+        )
+        .join(LinkReport, LinkReport.link_id == Link.id)
+        .group_by(Link.id)
+        .order_by(
+            func.count(LinkReport.id).desc(),
+            func.max(LinkReport.created_at).desc(),
+        )
+    ).all()
+
+    if not rows:
+        return []
+
+    reports = db.scalars(
+        select(LinkReport).where(
+            LinkReport.link_id.in_([row.id for row in rows])
+        )
+    ).all()
+
+    usernames = {
+        user.id: user.username
+        for user in db.scalars(
+            select(User).where(
+                User.id.in_([report.user_id for report in reports])
+            )
+        ).all()
+    }
+
+    by_link: dict[int, list[dict]] = {}
+
+    for report in reports:
+        by_link.setdefault(report.link_id, []).append(
+            {
+                "id": report.id,
+                "user_id": report.user_id,
+                "username": usernames.get(report.user_id),
+                "reason": report.reason,
+                "created_at": report.created_at,
+            }
+        )
+
+    return [
+        {
+            "link_id": row.id,
+            "title": row.title,
+            "url": row.url,
+            "report_count": row.report_count,
+            "last_reported_at": row.last_reported_at,
+            "verification_status": row.verification_status,
+            "verified_at": row.verified_at,
+            "reports": by_link.get(row.id, []),
+        }
+        for row in rows
+    ]
+
+
+@router.post("/reports/{link_id}/resolve")
+def resolve_reports(
+    link_id: int,
+    verdict: str,
+    current_user: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    if verdict not in (*VERIFICATION_STATUSES, "none"):
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid verdict",
+        )
+
+    link = db.scalar(
+        select(Link).where(Link.id == link_id)
+    )
+
+    if not link:
+        raise HTTPException(
+            status_code=404,
+            detail="Link not found",
+        )
+
+    link.verification_status = None if verdict == "none" else verdict
+    link.verified_by_id = None if verdict == "none" else current_user.id
+    link.verified_at = None if verdict == "none" else datetime.utcnow()
+
+    db.commit()
+    db.refresh(link)
+
+    return {
+        "link_id": link.id,
+        "verification_status": link.verification_status,
+        "verified_at": link.verified_at,
+        "verified_by": current_user.username if link.verification_status else None,
     }

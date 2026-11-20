@@ -15,6 +15,7 @@ from app.models.user import User
 from app.models.category import Category
 from app.models.list import LinkList
 from app.models.link import Link
+from app.models.link_report import LinkReport
 from app.models.link_request import LinkRequest
 from app.models.tag import Tag
 from app.models.link_tag import LinkTag

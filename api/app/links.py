@@ -3,7 +3,7 @@ import unicodedata
 from datetime import datetime, timedelta
 
 from fastapi import APIRouter, Depends, HTTPException, Request
-from sqlalchemy import delete, select
+from sqlalchemy import delete, func, select
 from sqlalchemy.orm import Session, joinedload
 
 from app.ai_detect import analyze_text
@@ -15,11 +15,17 @@ from app.page_fetch import fetch_page_metadata, fetch_page_text
 from app.ratelimit import limit_creation, limit_preview
 from app.sensitivity_detect import detect_sensitivity
 from app.models.link import Link
+from app.models.link_report import LinkReport
 from app.models.link_tag import LinkTag
 from app.models.list import LinkList
 from app.models.translation import Translation
 from app.models.user import User
-from app.schemas.link import LinkCreate, LinkPreviewRequest, LinkUpdate
+from app.schemas.link import (
+    LinkCreate,
+    LinkPreviewRequest,
+    LinkReportCreate,
+    LinkUpdate,
+)
 from app.tags import get_or_create_tag
 from app.translations import (
     delete_entity_translations,
@@ -37,9 +43,21 @@ router = APIRouter(
 )
 
 
+def report_count_for(db: Session, link_id: int) -> int:
+    return (
+        db.scalar(
+            select(func.count(LinkReport.id)).where(
+                LinkReport.link_id == link_id
+            )
+        )
+        or 0
+    )
+
+
 def serialize_link(
     link: Link,
     translation: Translation | None = None,
+    report_count: int = 0,
 ) -> dict:
     return {
         "id": link.id,
@@ -64,6 +82,10 @@ def serialize_link(
         "updated_at": link.updated_at,
         "ai_score": link.ai_score,
         "ai_checked_at": link.ai_checked_at,
+        "report_count": report_count,
+        "verification_status": link.verification_status,
+        "verified_at": link.verified_at,
+        "verified_by": link.verifier.username if link.verifier else None,
     }
 
 
@@ -202,7 +224,7 @@ def list_links(
 ):
     query = (
         select(Link)
-        .options(joinedload(Link.user))
+        .options(joinedload(Link.user), joinedload(Link.verifier))
         .order_by(Link.points.desc(), Link.created_at.desc())
     )
 
@@ -210,6 +232,15 @@ def list_links(
         query = query.where(Link.list_id == list_id)
 
     links = db.scalars(query).all()
+
+    report_counts = dict(
+        db.execute(
+            select(
+                LinkReport.link_id,
+                func.count(LinkReport.id),
+            ).group_by(LinkReport.link_id)
+        ).all()
+    )
 
     translations = {}
 
@@ -224,7 +255,11 @@ def list_links(
         )
 
     return [
-        serialize_link(link, translation=translations.get(link.id))
+        serialize_link(
+            link,
+            translation=translations.get(link.id),
+            report_count=report_counts.get(link.id, 0),
+        )
         for link in links
     ]
 
@@ -237,7 +272,7 @@ def get_link(
 ):
     link = db.scalar(
         select(Link)
-        .options(joinedload(Link.user))
+        .options(joinedload(Link.user), joinedload(Link.verifier))
         .where(Link.id == link_id)
     )
 
@@ -260,7 +295,11 @@ def get_link(
         )
         translation = translations.get(link.id)
 
-    return serialize_link(link, translation=translation)
+    return serialize_link(
+        link,
+        translation=translation,
+        report_count=report_count_for(db, link.id),
+    )
 
 
 @router.post("", status_code=201)
@@ -304,7 +343,7 @@ def create_link(
 
     _auto_translate_link(db, link)
 
-    return serialize_link(link)
+    return serialize_link(link, report_count=report_count_for(db, link.id))
 
 
 def _auto_translate_link(db: Session, link: Link) -> None:
@@ -381,7 +420,7 @@ def update_link(
     db.commit()
     db.refresh(link)
 
-    return serialize_link(link)
+    return serialize_link(link, report_count=report_count_for(db, link.id))
 
 
 @router.delete("/{link_id}")
@@ -442,7 +481,7 @@ def ai_check_link(
         link.ai_checked_at
         and datetime.utcnow() - link.ai_checked_at < AI_CHECK_TTL
     ):
-        return serialize_link(link)
+        return serialize_link(link, report_count=report_count_for(db, link.id))
 
     try:
         page_text = fetch_page_text(link.url)
@@ -460,4 +499,49 @@ def ai_check_link(
     db.commit()
     db.refresh(link)
 
-    return serialize_link(link)
+    return serialize_link(link, report_count=report_count_for(db, link.id))
+
+
+@router.post("/{link_id}/report")
+def report_link(
+    link_id: int,
+    payload: LinkReportCreate,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    link = db.scalar(
+        select(Link).where(Link.id == link_id)
+    )
+
+    if not link:
+        raise HTTPException(
+            status_code=404,
+            detail="Link not found",
+        )
+
+    existing = db.scalar(
+        select(LinkReport).where(
+            LinkReport.link_id == link_id,
+            LinkReport.user_id == current_user.id,
+        )
+    )
+
+    if existing:
+        existing.reason = payload.reason
+        existing.created_at = datetime.utcnow()
+    else:
+        db.add(
+            LinkReport(
+                link_id=link_id,
+                user_id=current_user.id,
+                reason=payload.reason,
+            )
+        )
+
+    db.commit()
+
+    return {
+        "link_id": link_id,
+        "reason": payload.reason,
+        "report_count": report_count_for(db, link_id),
+    }

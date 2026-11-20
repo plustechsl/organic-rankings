@@ -7,7 +7,12 @@ import Navbar from "@/app/components/Navbar";
 import { api, getToken, ApiRequestError } from "@/app/lib/api";
 import { useLang } from "@/app/lib/lang";
 import { format, DATE_LOCALES } from "@/app/lib/i18n";
-import { AdminInvitation, Category } from "@/app/lib/types";
+import {
+  AdminInvitation,
+  AdminLinkReport,
+  Category,
+  VerificationStatus,
+} from "@/app/lib/types";
 
 type CurrentUser = {
   id: number;
@@ -77,6 +82,12 @@ export default function AdminPage() {
   );
   const [categoryError, setCategoryError] = useState<string | null>(null);
   const [categoryNotice, setCategoryNotice] = useState<string | null>(null);
+
+  const [reports, setReports] = useState<AdminLinkReport[]>([]);
+  const [reportsLoading, setReportsLoading] = useState(false);
+  const [reportsError, setReportsError] = useState<string | null>(null);
+  const [reportNotice, setReportNotice] = useState<string | null>(null);
+  const [resolvingId, setResolvingId] = useState<number | null>(null);
 
   function statusLabel(status: string): string {
     if (status === "approved") {
@@ -250,6 +261,49 @@ export default function AdminPage() {
     }
   }
 
+  useEffect(() => {
+    if (allowed !== true) {
+      return;
+    }
+
+    async function loadReports() {
+      setReportsLoading(true);
+      setReportsError(null);
+
+      try {
+        setReports(await api.get<AdminLinkReport[]>("/admin/reports"));
+      } catch {
+        setReportsError(t.report.loadError);
+      } finally {
+        setReportsLoading(false);
+      }
+    }
+
+    loadReports();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [allowed, locale]);
+
+  async function handleResolve(
+    linkId: number,
+    verdict: VerificationStatus | "none"
+  ) {
+    setResolvingId(linkId);
+    setReportsError(null);
+    setReportNotice(null);
+
+    try {
+      await api.post(`/admin/reports/${linkId}/resolve?verdict=${verdict}`);
+      setReportNotice(t.report.resolved);
+      setReports(await api.get<AdminLinkReport[]>("/admin/reports"));
+    } catch (err) {
+      setReportsError(
+        err instanceof ApiRequestError ? err.message : t.report.resolveError
+      );
+    } finally {
+      setResolvingId(null);
+    }
+  }
+
   return (
     <main className="min-h-screen bg-white text-gray-900">
       <header className="border-b border-gray-200">
@@ -375,6 +429,116 @@ export default function AdminPage() {
                             {t.admin.reject}
                           </button>
                         </>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            <h2 className="mb-1 mt-12 text-lg font-semibold">
+              {t.report.adminTitle}
+            </h2>
+            <p className="mb-4 text-sm text-gray-500">{t.report.adminIntro}</p>
+
+            {reportsError && (
+              <p className="mb-4 rounded-lg bg-red-50 px-4 py-2 text-sm text-red-700">
+                {reportsError}
+              </p>
+            )}
+
+            {reportNotice && (
+              <p className="mb-4 rounded-lg bg-green-50 px-4 py-2 text-sm text-green-700">
+                {reportNotice}
+              </p>
+            )}
+
+            {reportsLoading && (
+              <p className="text-sm text-gray-500">{t.common.loading}</p>
+            )}
+
+            {!reportsLoading && reports.length === 0 && (
+              <p className="text-sm text-gray-500">{t.report.adminEmpty}</p>
+            )}
+
+            {!reportsLoading && reports.length > 0 && (
+              <div className="divide-y divide-gray-100 rounded-lg border border-gray-200">
+                {reports.map((item) => (
+                  <div key={item.link_id} className="px-4 py-3">
+                    <div className="flex flex-wrap items-baseline justify-between gap-2">
+                      <div className="min-w-0">
+                        <a
+                          href={item.url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-sm font-medium text-blue-700 hover:underline"
+                        >
+                          {item.title}
+                        </a>
+
+                        <p className="text-xs text-gray-400">
+                          {item.report_count === 1
+                            ? t.report.countOne
+                            : format(t.report.countMany, {
+                                count: item.report_count,
+                              })}{" "}
+                          ·{" "}
+                          {new Date(item.last_reported_at).toLocaleDateString(
+                            DATE_LOCALES[locale]
+                          )}
+                        </p>
+                      </div>
+
+                      {item.verification_status && (
+                        <span
+                          className={`rounded-full px-2.5 py-1 text-xs ${
+                            item.verification_status === "fiable"
+                              ? "bg-green-50 text-green-700"
+                              : "bg-amber-50 text-amber-700"
+                          }`}
+                        >
+                          {format(t.report.reviewed, {
+                            verdict: t.report[item.verification_status],
+                          })}
+                        </span>
+                      )}
+                    </div>
+
+                    <p className="mt-1 text-xs text-gray-500">
+                      {t.report.reasonsLabel}:{" "}
+                      {item.reports
+                        .map((report) => t.report.reasons[report.reason])
+                        .join(", ")}
+                    </p>
+
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      <button
+                        type="button"
+                        disabled={resolvingId === item.link_id}
+                        onClick={() => handleResolve(item.link_id, "fiable")}
+                        className="rounded-full border border-green-300 px-3 py-1 text-xs text-green-700 transition hover:bg-green-50 disabled:opacity-50"
+                      >
+                        {t.report.resolve} {t.report.fiable}
+                      </button>
+
+                      <button
+                        type="button"
+                        disabled={resolvingId === item.link_id}
+                        onClick={() => handleResolve(item.link_id, "dudoso")}
+                        className="rounded-full border border-amber-300 px-3 py-1 text-xs text-amber-700 transition hover:bg-amber-50 disabled:opacity-50"
+                      >
+                        {t.report.resolve} {t.report.dudoso}
+                      </button>
+
+                      {item.verification_status && (
+                        <button
+                          type="button"
+                          disabled={resolvingId === item.link_id}
+                          onClick={() => handleResolve(item.link_id, "none")}
+                          className="rounded-full border border-gray-300 px-3 py-1 text-xs text-gray-600 transition hover:bg-gray-50 disabled:opacity-50"
+                        >
+                          {t.report.clear}
+                        </button>
                       )}
                     </div>
                   </div>
