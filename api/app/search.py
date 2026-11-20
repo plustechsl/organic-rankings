@@ -34,7 +34,7 @@ def _normalize(value: str) -> str:
     )
 
 
-def _haystack(link_translation=None, list_translation=None):
+def _haystack(link_translation=None, list_translation=None, tag_names=None):
     parts = [
         func.f_unaccent(func.lower(Link.title)),
         func.f_unaccent(func.lower(Link.description)),
@@ -68,6 +68,9 @@ def _haystack(link_translation=None, list_translation=None):
                 "",
             )
         )
+
+    if tag_names is not None:
+        parts.append(func.coalesce(tag_names, ""))
 
     return func.concat_ws(" ", *parts)
 
@@ -141,20 +144,53 @@ def search(
     link_translation = aliased(Translation)
     list_translation = aliased(Translation)
     category_translation = aliased(Translation)
+    tag_filter_translation = aliased(Translation)
+    word_tag_relation = aliased(LinkTag)
+    word_tag = aliased(Tag)
+    word_tag_translation = aliased(Translation)
 
     exact_conditions = []
     fuzzy_conditions = []
     filter_conditions = []
     fuzzy_enabled = False
 
+    # Los nombres de los tags entran en el texto buscable: así "economia"
+    # (sin #) también encuentra los enlaces etiquetados con ese tag, y la
+    # tolerancia a erratas existente cubre igualmente los tags.
+    tag_label = func.coalesce(
+        func.f_unaccent(func.lower(word_tag_translation.title)),
+        func.f_unaccent(
+            func.lower(func.replace(word_tag.name, "-", " "))
+        ),
+    )
+    tag_names = (
+        select(func.coalesce(func.string_agg(tag_label, " "), ""))
+        .select_from(word_tag_relation)
+        .join(word_tag, word_tag_relation.tag_id == word_tag.id)
+        .outerjoin(
+            word_tag_translation,
+            and_(
+                word_tag_translation.entity_type == "tag",
+                word_tag_translation.entity_id == word_tag.id,
+                word_tag_translation.lang == lang,
+            ),
+        )
+        .where(word_tag_relation.link_id == Link.id)
+        .correlate(Link)
+        .scalar_subquery()
+    )
+
     haystack = _haystack(
         link_translation if lang else None,
         list_translation if lang else None,
+        tag_names,
     )
 
     if q:
         for raw_word in q.split():
-            word = _normalize(raw_word)
+            # "#economia" escrito directamente en la API equivale a
+            # "economia"; la UI ya separa el # y lo envía como ?tag=.
+            word = _normalize(raw_word.lstrip("#"))
 
             if not word:
                 continue
@@ -203,6 +239,37 @@ def search(
             category_alias.id.in_(matching_categories)
         )
 
+    if tag:
+        normalized_tag = _normalize(tag)
+        matching_tags = (
+            select(Tag.id)
+            .outerjoin(
+                tag_filter_translation,
+                and_(
+                    tag_filter_translation.entity_type == "tag",
+                    tag_filter_translation.entity_id == Tag.id,
+                ),
+            )
+            .where(
+                or_(
+                    Tag.slug == slugify(tag),
+                    func.f_unaccent(
+                        func.lower(func.replace(Tag.name, "-", " "))
+                    ) == normalized_tag,
+                    func.f_unaccent(
+                        func.lower(tag_filter_translation.title)
+                    ) == normalized_tag,
+                )
+            )
+        )
+        filter_conditions.append(
+            Link.id.in_(
+                select(LinkTag.link_id).where(
+                    LinkTag.tag_id.in_(matching_tags)
+                )
+            )
+        )
+
     def build_query(word_conditions):
         query = (
             select(Link, LinkList, category_alias)
@@ -229,13 +296,6 @@ def search(
                     list_translation.entity_id == LinkList.id,
                     list_translation.lang == lang,
                 ),
-            )
-
-        if tag:
-            query = (
-                query.join(LinkTag, LinkTag.link_id == Link.id)
-                .join(Tag, LinkTag.tag_id == Tag.id)
-                .where(Tag.slug == slugify(tag))
             )
 
         return query
