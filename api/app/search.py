@@ -34,16 +34,12 @@ def _normalize(value: str) -> str:
     )
 
 
-def _haystack(
-    link_translation=None,
-    list_translation=None,
-    tag_names=None,
-    category_label=None,
-):
+def _haystack(link_translation=None, tag_names=None, category_label=None):
+    # Solo campos del enlace: el título y la descripción de la lista no
+    # deben hacer que aparezcan enlaces que no tienen que ver con la búsqueda.
     parts = [
         func.f_unaccent(func.lower(Link.title)),
         func.f_unaccent(func.lower(Link.description)),
-        func.f_unaccent(func.lower(LinkList.title)),
     ]
 
     if category_label is not None:
@@ -59,20 +55,6 @@ def _haystack(
         parts.append(
             func.coalesce(
                 func.f_unaccent(func.lower(link_translation.description)),
-                "",
-            )
-        )
-
-    if list_translation is not None:
-        parts.append(
-            func.coalesce(
-                func.f_unaccent(func.lower(list_translation.title)),
-                "",
-            )
-        )
-        parts.append(
-            func.coalesce(
-                func.f_unaccent(func.lower(list_translation.description)),
                 "",
             )
         )
@@ -169,7 +151,6 @@ def search(
 ):
     category_alias = aliased(Category)
     link_translation = aliased(Translation)
-    list_translation = aliased(Translation)
     category_translation = aliased(Translation)
     tag_filter_translation = aliased(Translation)
     word_tag_relation = aliased(LinkTag)
@@ -225,7 +206,6 @@ def search(
 
     haystack = _haystack(
         link_translation if lang else None,
-        list_translation if lang else None,
         tag_names,
         category_label,
     )
@@ -325,13 +305,6 @@ def search(
                     link_translation.entity_type == "link",
                     link_translation.entity_id == Link.id,
                     link_translation.lang == lang,
-                ),
-            ).outerjoin(
-                list_translation,
-                and_(
-                    list_translation.entity_type == "list",
-                    list_translation.entity_id == LinkList.id,
-                    list_translation.lang == lang,
                 ),
             ).outerjoin(
                 word_category_translation,
