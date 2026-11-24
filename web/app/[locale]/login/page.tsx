@@ -19,6 +19,7 @@ export default function LoginPage() {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [turnstileToken, setTurnstileToken] = useState<string | null>(null);
+  const [captchaExpired, setCaptchaExpired] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -27,6 +28,7 @@ export default function LoginPage() {
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setError(null);
+    setCaptchaExpired(false);
     setLoading(true);
 
     try {
@@ -40,7 +42,11 @@ export default function LoginPage() {
       router.push(path("/"));
     } catch (err) {
       if (err instanceof ApiRequestError) {
-        setError(err.message);
+        if (err.status === 400 && err.message === "Captcha verification failed") {
+          setCaptchaExpired(true);
+        } else {
+          setError(err.message);
+        }
       } else {
         setError(t.login.noConnect);
       }
@@ -99,7 +105,17 @@ export default function LoginPage() {
           </div>
 
           {turnstileSiteKey && (
-            <Turnstile siteKey={turnstileSiteKey} onToken={setTurnstileToken} />
+            <Turnstile
+              siteKey={turnstileSiteKey}
+              onToken={setTurnstileToken}
+              onExpired={() => setCaptchaExpired(true)}
+            />
+          )}
+
+          {captchaExpired && (
+            <p className="rounded-lg bg-amber-50 px-4 py-2 text-sm text-amber-800">
+              {t.login.captchaExpired}
+            </p>
           )}
 
           {error && (
@@ -110,7 +126,9 @@ export default function LoginPage() {
 
           <button
             type="submit"
-            disabled={loading || (!!turnstileSiteKey && !turnstileToken)}
+            disabled={
+              loading || captchaExpired || (!!turnstileSiteKey && !turnstileToken)
+            }
             className="w-full rounded-full bg-gray-900 px-5 py-2.5 text-sm font-medium text-white transition hover:bg-gray-700 disabled:opacity-50"
           >
             {loading ? t.login.entering : t.login.enter}

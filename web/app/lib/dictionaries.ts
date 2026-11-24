@@ -198,6 +198,8 @@ const es = {
     noAccount: "¿No tienes cuenta?",
     register: "Regístrate",
     noConnect: "No se pudo conectar con el servidor.",
+    captchaExpired:
+      "El captcha ha caducado. Recarga la página para volver a intentarlo.",
   },
   register: {
     title: "Crear cuenta",
@@ -560,6 +562,7 @@ const en: Dictionary = {
     noAccount: "Don't have an account?",
     register: "Sign up",
     noConnect: "Could not connect to the server.",
+    captchaExpired: "The captcha has expired. Reload the page to try again.",
   },
   register: {
     title: "Create account",
@@ -921,6 +924,8 @@ const ca: Dictionary = {
     noAccount: "No tens compte?",
     register: "Registra't",
     noConnect: "No s'ha pogut connectar amb el servidor.",
+    captchaExpired:
+      "El captcha ha caducat. Torna a carregar la pàgina per tornar-ho a provar.",
   },
   register: {
     title: "Crea un compte",

@@ -5,6 +5,7 @@ import { useEffect, useRef } from "react";
 type TurnstileProps = {
   siteKey: string;
   onToken: (token: string | null) => void;
+  onExpired?: () => void;
 };
 
 declare global {
@@ -25,14 +26,16 @@ declare global {
 
 const SCRIPT_ID = "cf-turnstile-script";
 
-export default function Turnstile({ siteKey, onToken }: TurnstileProps) {
+export default function Turnstile({ siteKey, onToken, onExpired }: TurnstileProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const widgetIdRef = useRef<string | null>(null);
   const onTokenRef = useRef(onToken);
+  const onExpiredRef = useRef(onExpired);
 
   useEffect(() => {
     onTokenRef.current = onToken;
-  }, [onToken]);
+    onExpiredRef.current = onExpired;
+  }, [onToken, onExpired]);
 
   useEffect(() => {
     let cancelled = false;
@@ -50,7 +53,10 @@ export default function Turnstile({ siteKey, onToken }: TurnstileProps) {
       widgetIdRef.current = window.turnstile.render(containerRef.current, {
         sitekey: siteKey,
         callback: (token) => onTokenRef.current(token),
-        "expired-callback": () => onTokenRef.current(null),
+        "expired-callback": () => {
+          onTokenRef.current(null);
+          onExpiredRef.current?.();
+        },
         "error-callback": () => onTokenRef.current(null),
       });
     }
