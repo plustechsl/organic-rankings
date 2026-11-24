@@ -2,7 +2,7 @@ import re
 import unicodedata
 
 from fastapi import APIRouter, Depends, Query
-from sqlalchemy import and_, func, or_, select, text
+from sqlalchemy import and_, case, func, or_, select, text
 from sqlalchemy.orm import Session, aliased
 
 from app.config import TRANSLATION_LANGS
@@ -34,12 +34,20 @@ def _normalize(value: str) -> str:
     )
 
 
-def _haystack(link_translation=None, list_translation=None, tag_names=None):
+def _haystack(
+    link_translation=None,
+    list_translation=None,
+    tag_names=None,
+    category_label=None,
+):
     parts = [
         func.f_unaccent(func.lower(Link.title)),
         func.f_unaccent(func.lower(Link.description)),
         func.f_unaccent(func.lower(LinkList.title)),
     ]
+
+    if category_label is not None:
+        parts.append(category_label)
 
     if link_translation is not None:
         parts.append(
@@ -88,6 +96,25 @@ def _levenshtein_condition(word: str, haystack):
             word, tokens.c.token, max_distance
         ) <= max_distance,
     ).exists()
+
+
+def _field_condition(word: str, field, allow_fuzzy: bool):
+    """Misma coincidencia que la búsqueda general, pero sobre un solo campo.
+
+    Se usa para decidir en qué nivel va cada enlace sin añadir columnas
+    nuevas a la respuesta: la clasificación solo entra en el ORDER BY.
+    """
+    exact = field.op("~")(r"\m" + re.escape(word))
+
+    if not allow_fuzzy or len(word) < FUZZY_MIN_WORD_LENGTH:
+        return exact
+
+    return or_(
+        exact,
+        func.strict_word_similarity(word, field)
+        >= FUZZY_SIMILARITY_THRESHOLD,
+        _levenshtein_condition(word, field),
+    )
 
 
 def ensure_search_ready() -> None:
@@ -148,11 +175,13 @@ def search(
     word_tag_relation = aliased(LinkTag)
     word_tag = aliased(Tag)
     word_tag_translation = aliased(Translation)
+    word_category_translation = aliased(Translation)
 
     exact_conditions = []
     fuzzy_conditions = []
     filter_conditions = []
     fuzzy_enabled = False
+    words = []
 
     # Los nombres de los tags entran en el texto buscable: así "economia"
     # (sin #) también encuentra los enlaces etiquetados con ese tag, y la
@@ -180,10 +209,25 @@ def search(
         .scalar_subquery()
     )
 
+    # El nombre de la categoría entra también en el texto buscable: antes
+    # solo se podía acotar con el prefijo "categoria:".
+    if lang:
+        category_label = func.coalesce(
+            func.f_unaccent(func.lower(word_category_translation.title)),
+            func.f_unaccent(func.lower(category_alias.name)),
+            "",
+        )
+    else:
+        category_label = func.coalesce(
+            func.f_unaccent(func.lower(category_alias.name)),
+            "",
+        )
+
     haystack = _haystack(
         link_translation if lang else None,
         list_translation if lang else None,
         tag_names,
+        category_label,
     )
 
     if q:
@@ -195,23 +239,16 @@ def search(
             if not word:
                 continue
 
-            exact = haystack.op("~")(r"\m" + re.escape(word))
-
-            exact_conditions.append(exact)
+            words.append(word)
+            exact_conditions.append(
+                _field_condition(word, haystack, allow_fuzzy=False)
+            )
+            fuzzy_conditions.append(
+                _field_condition(word, haystack, allow_fuzzy=True)
+            )
 
             if len(word) >= FUZZY_MIN_WORD_LENGTH:
                 fuzzy_enabled = True
-
-                fuzzy_conditions.append(
-                    or_(
-                        exact,
-                        func.strict_word_similarity(word, haystack)
-                        >= FUZZY_SIMILARITY_THRESHOLD,
-                        _levenshtein_condition(word, haystack),
-                    )
-                )
-            else:
-                fuzzy_conditions.append(exact)
 
     if category:
         normalized = _normalize(category)
@@ -296,6 +333,13 @@ def search(
                     list_translation.entity_id == LinkList.id,
                     list_translation.lang == lang,
                 ),
+            ).outerjoin(
+                word_category_translation,
+                and_(
+                    word_category_translation.entity_type == "category",
+                    word_category_translation.entity_id == category_alias.id,
+                    word_category_translation.lang == lang,
+                ),
             )
 
         return query
@@ -306,20 +350,62 @@ def search(
         select(func.count()).select_from(base_query.subquery())
     )
 
+    fuzzy_applied = False
     if total == 0 and fuzzy_enabled:
         base_query = build_query(fuzzy_conditions)
+        fuzzy_applied = True
 
         total = db.scalar(
             select(func.count()).select_from(base_query.subquery())
         )
 
-    if sort == "recent":
-        base_query = base_query.order_by(Link.created_at.desc())
+    # Clasificación interna: nivel 1 si coincide en título (enlace o lista),
+    # categoría o tags; nivel 2 si solo coincide en una descripción. Con
+    # varias palabras basta una que coincida en nivel 1. El nivel no se
+    # devuelve: solo entra en el ORDER BY, así que la API no cambia.
+    if words:
+        primary_fields = [
+            func.coalesce(func.f_unaccent(func.lower(Link.title)), ""),
+            func.coalesce(func.f_unaccent(func.lower(LinkList.title)), ""),
+            category_label,
+            tag_names,
+        ]
+        if lang:
+            primary_fields.extend(
+                [
+                    func.coalesce(
+                        func.f_unaccent(func.lower(link_translation.title)),
+                        "",
+                    ),
+                    func.coalesce(
+                        func.f_unaccent(func.lower(list_translation.title)),
+                        "",
+                    ),
+                ]
+            )
+
+        primary_matches = [
+            or_(
+                *[
+                    _field_condition(word, field, fuzzy_applied)
+                    for field in primary_fields
+                ]
+            )
+            for word in words
+        ]
+        relevance = case((or_(*primary_matches), 0), else_=1)
     else:
-        base_query = base_query.order_by(
-            Link.points.desc(),
-            Link.created_at.desc(),
-        )
+        relevance = None
+
+    order_by = []
+    if relevance is not None:
+        order_by.append(relevance.asc())
+    if sort == "recent":
+        order_by.append(Link.created_at.desc())
+    else:
+        order_by.extend([Link.points.desc(), Link.created_at.desc()])
+
+    base_query = base_query.order_by(*order_by)
 
     rows = db.execute(
         base_query.offset((page - 1) * page_size).limit(page_size)
