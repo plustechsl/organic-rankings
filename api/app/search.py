@@ -359,29 +359,23 @@ def search(
             select(func.count()).select_from(base_query.subquery())
         )
 
-    # Clasificación interna: nivel 1 si coincide en título (enlace o lista),
-    # categoría o tags; nivel 2 si solo coincide en una descripción. Con
-    # varias palabras basta una que coincida en nivel 1. El nivel no se
-    # devuelve: solo entra en el ORDER BY, así que la API no cambia.
+    # Clasificación interna: nivel 1 si coincide en el título del enlace,
+    # la categoría o los tags; nivel 2 si la coincidencia está solo en el
+    # título de la lista o en una descripción. Con varias palabras basta
+    # una que coincida en nivel 1. El nivel no se devuelve: solo entra en
+    # el ORDER BY, así que la API no cambia.
     if words:
         primary_fields = [
             func.coalesce(func.f_unaccent(func.lower(Link.title)), ""),
-            func.coalesce(func.f_unaccent(func.lower(LinkList.title)), ""),
             category_label,
             tag_names,
         ]
         if lang:
-            primary_fields.extend(
-                [
-                    func.coalesce(
-                        func.f_unaccent(func.lower(link_translation.title)),
-                        "",
-                    ),
-                    func.coalesce(
-                        func.f_unaccent(func.lower(list_translation.title)),
-                        "",
-                    ),
-                ]
+            primary_fields.append(
+                func.coalesce(
+                    func.f_unaccent(func.lower(link_translation.title)),
+                    "",
+                )
             )
 
         primary_matches = [
