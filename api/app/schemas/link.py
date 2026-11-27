@@ -90,6 +90,23 @@ class LinkPreviewRequest(BaseModel):
         return value
 
 
+
+class AiUrlCheckRequest(BaseModel):
+    url: str
+
+    @field_validator("url")
+    @classmethod
+    def url_valid(cls, value: str) -> str:
+        value = value.strip()
+        if not value:
+            raise ValueError("URL cannot be empty")
+        if len(value) > 2048:
+            raise ValueError("URL is too long")
+        if not (value.startswith("http://") or value.startswith("https://")):
+            raise ValueError("URL must start with http:// or https://")
+        return value
+
+
 class LinkUpdate(BaseModel):
     title: str | None = None
     url: str | None = None

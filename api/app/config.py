@@ -66,6 +66,9 @@ CREATION_RATE_WINDOW = int(getenv("CREATION_RATE_WINDOW", "3600"))
 PREVIEW_RATE_LIMIT = int(getenv("PREVIEW_RATE_LIMIT", "60"))
 PREVIEW_RATE_WINDOW = int(getenv("PREVIEW_RATE_WINDOW", "3600"))
 
+AI_URL_RATE_LIMIT = int(getenv("AI_URL_RATE_LIMIT", "20"))
+AI_URL_RATE_WINDOW = int(getenv("AI_URL_RATE_WINDOW", "3600"))
+
 # =============================================================================
 # Invitaciones
 # =============================================================================

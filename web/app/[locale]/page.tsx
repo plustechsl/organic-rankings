@@ -4,12 +4,18 @@ import Link from "next/link";
 import { FormEvent, useState } from "react";
 import Navbar from "@/app/components/Navbar";
 import Logo from "@/app/components/Logo";
+import {
+  AiUrlButton,
+  AiUrlResultPanel,
+  useAiUrlCheck,
+} from "@/app/components/AiUrlCheck";
 import { useLang } from "@/app/lib/lang";
 
 export default function Home() {
   const { t, path } = useLang();
 
   const [query, setQuery] = useState("");
+  const aiCheck = useAiUrlCheck();
 
   function handleSearch(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -61,7 +67,7 @@ export default function Home() {
               onSubmit={handleSearch}
               className="mx-auto flex w-full max-w-2xl items-center rounded-full border border-gray-300 bg-white px-5 py-2 shadow-sm transition focus-within:border-gray-400 focus-within:shadow-md"
             >
-              <span className="mr-3 text-xl text-gray-400">⌕</span>
+              <span className="mr-3 hidden text-xl text-gray-400 sm:inline">⌕</span>
 
               <input
                 type="text"
@@ -74,11 +80,20 @@ export default function Home() {
 
               <button
                 type="submit"
-                className="ml-3 rounded-full bg-gray-900 px-5 py-2.5 text-sm font-medium text-white transition hover:bg-gray-700"
+                className="ml-3 shrink-0 rounded-full bg-gray-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-gray-700 sm:px-5 sm:py-2.5"
               >
                 {t.common.search}
               </button>
+
+              <AiUrlButton
+                loading={aiCheck.state.status === "loading"}
+                onClick={() => aiCheck.run(query)}
+              />
             </form>
+
+            <div className="mx-auto mt-4 w-full max-w-2xl" aria-live="polite">
+              <AiUrlResultPanel state={aiCheck.state} onClose={aiCheck.reset} />
+            </div>
           </div>
         </section>
 

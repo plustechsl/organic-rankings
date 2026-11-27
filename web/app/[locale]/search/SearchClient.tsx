@@ -6,6 +6,11 @@ import { useSearchParams, useRouter } from "next/navigation";
 import Navbar from "@/app/components/Navbar";
 import AdSlot from "@/app/components/AdSlot";
 import SensitivityBadge from "@/app/components/SensitivityBadge";
+import {
+  AiUrlButton,
+  AiUrlResultPanel,
+  useAiUrlCheck,
+} from "@/app/components/AiUrlCheck";
 import { api } from "@/app/lib/api";
 import { useLang } from "@/app/lib/lang";
 import { format } from "@/app/lib/i18n";
@@ -41,6 +46,7 @@ export default function SearchClient() {
   const rawQuery = searchParams.get("q") ?? "";
 
   const [inputValue, setInputValue] = useState(rawQuery);
+  const aiCheck = useAiUrlCheck();
   const [data, setData] = useState<SearchResponse | null>(null);
   const [foundLists, setFoundLists] = useState<FoundList[]>([]);
   const [loading, setLoading] = useState(true);
@@ -138,7 +144,7 @@ export default function SearchClient() {
   return (
     <main className="min-h-screen bg-white text-gray-900">
       <header className="border-b border-gray-200">
-        <div className="mx-auto flex max-w-6xl items-center gap-8 px-6 py-5">
+        <div className="mx-auto flex max-w-6xl flex-wrap items-center gap-x-8 gap-y-3 px-6 py-5">
           <Link href={path("/")} className="text-xl font-semibold tracking-tight">
             Organic Rankings
           </Link>
@@ -162,6 +168,11 @@ export default function SearchClient() {
             >
               {t.common.search}
             </button>
+
+            <AiUrlButton
+              loading={aiCheck.state.status === "loading"}
+              onClick={() => aiCheck.run(inputValue)}
+            />
           </form>
 
           <Navbar />
@@ -177,6 +188,16 @@ export default function SearchClient() {
           </aside>
 
           <div>
+            {aiCheck.state.status !== "idle" &&
+              aiCheck.state.status !== "loading" && (
+                <div className="mb-8" aria-live="polite">
+                  <AiUrlResultPanel
+                    state={aiCheck.state}
+                    onClose={aiCheck.reset}
+                  />
+                </div>
+              )}
+
             {rawQuery && (
               <p className="mb-8 text-sm text-gray-500">
                 {format(t.search.resultsFor, { query: rawQuery })}

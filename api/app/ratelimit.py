@@ -23,6 +23,8 @@ from app.config import (
     VOTE_IP_RATE_WINDOW,
     VOTE_USER_RATE_LIMIT,
     VOTE_USER_RATE_WINDOW,
+    AI_URL_RATE_LIMIT,
+    AI_URL_RATE_WINDOW,
 )
 from app.net import get_client_ip
 from app.utils import hash_ip
@@ -142,6 +144,13 @@ def limit_preview(request: Request, user_id: int) -> None:
         PREVIEW_RATE_LIMIT,
         PREVIEW_RATE_WINDOW,
         f"user:{user_id}",
+    )
+def limit_ai_url(request: Request) -> None:
+    _enforce(
+        "ai-url",
+        AI_URL_RATE_LIMIT,
+        AI_URL_RATE_WINDOW,
+        f"ip:{hash_ip(get_client_ip(request))}",
     )
 
 

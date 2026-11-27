@@ -6,13 +6,13 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy import delete, func, select
 from sqlalchemy.orm import Session, joinedload
 
-from app.ai_detect import analyze_text
+from app.ai_detect import MIN_WORDS, analyze_text
 from app.categories import get_tags_by_category
 from app.config import TRANSLATION_LANGS
 from app.database import get_db
 from app.dependencies import get_current_user
 from app.page_fetch import fetch_page_metadata, fetch_page_text
-from app.ratelimit import limit_creation, limit_preview
+from app.ratelimit import limit_ai_url, limit_creation, limit_preview
 from app.sensitivity_detect import detect_sensitivity
 from app.models.link import Link
 from app.models.link_report import LinkReport
@@ -21,6 +21,7 @@ from app.models.list import LinkList
 from app.models.translation import Translation
 from app.models.user import User
 from app.schemas.link import (
+    AiUrlCheckRequest,
     LinkCreate,
     LinkPreviewRequest,
     LinkReportCreate,
@@ -110,6 +111,45 @@ def contains_term(haystack: str, term: str) -> bool:
     pattern = rf"(?<![a-z0-9]){re.escape(term)}(?![a-z0-9])"
     return re.search(pattern, haystack) is not None
 
+@router.post("/ai-check-url")
+def ai_check_url(
+    payload: AiUrlCheckRequest,
+    request: Request,
+):
+    """Estima qué parte del contenido de una URL parece generado por IA.
+
+    Es público (se usa desde el buscador) y limitado por IP. No guarda nada.
+    """
+    limit_ai_url(request)
+
+    try:
+        page_text = fetch_page_text(payload.url)
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=422,
+            detail=str(exc),
+        )
+
+    result = analyze_text(page_text)
+
+    if result is None:
+        return {
+            "url": payload.url,
+            "enough_text": False,
+            "min_words": MIN_WORDS,
+            "score": None,
+            "label": None,
+            "words": len(page_text.split()),
+            "confidence": None,
+            "signals": {},
+        }
+
+    return {
+        "url": payload.url,
+        "enough_text": True,
+        "min_words": MIN_WORDS,
+        **result,
+    }
 
 @router.post("/preview")
 def preview_link(
