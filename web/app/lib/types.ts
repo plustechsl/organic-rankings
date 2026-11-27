@@ -188,3 +188,14 @@ export type SearchResponse = {
   page_size: number;
   results: SearchResult[];
 };
+
+export type AiUrlCheckResult = {
+  url: string;
+  enough_text: boolean;
+  min_words: number;
+  score: number | null;
+  label: "bajo" | "mixto" | "alto" | null;
+  words: number;
+  confidence: number | null;
+  signals: Record<string, number | null>;
+};
