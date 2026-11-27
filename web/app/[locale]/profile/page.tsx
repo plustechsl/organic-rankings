@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { FormEvent, useEffect, useState } from "react";
+import { FormEvent, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Navbar from "@/app/components/Navbar";
 import Avatar from "@/app/components/Avatar";
@@ -39,7 +39,10 @@ export default function ProfilePage() {
 
   const [referrals, setReferrals] = useState<MyReferrals | null>(null);
   const [referralLink, setReferralLink] = useState("");
-  const [copied, setCopied] = useState(false);
+  const [copyState, setCopyState] = useState<"idle" | "copied" | "error">(
+    "idle"
+  );
+  const copyTimer = useRef<number | null>(null);
 
   const [editingProfile, setEditingProfile] = useState(false);
   const [username, setUsername] = useState("");
@@ -69,6 +72,14 @@ export default function ProfilePage() {
     }
     return t.profile.statusPending;
   }
+
+  useEffect(() => {
+    return () => {
+      if (copyTimer.current !== null) {
+        window.clearTimeout(copyTimer.current);
+      }
+    };
+  }, []);
 
   useEffect(() => {
     if (!getToken()) {
@@ -204,15 +215,79 @@ export default function ProfilePage() {
     }
   }
 
-  async function handleCopyLink() {
+  function copyWithFallback(text: string): boolean {
+    const textarea = document.createElement("textarea");
+    textarea.value = text;
+    textarea.setAttribute("readonly", "");
+    textarea.style.position = "fixed";
+    textarea.style.top = "-1000px";
+    textarea.style.left = "-1000px";
+    textarea.style.opacity = "0";
+
+    document.body.appendChild(textarea);
+    textarea.focus();
+    textarea.select();
+    textarea.setSelectionRange(0, textarea.value.length);
+
+    let copiedOk = false;
     try {
-      await navigator.clipboard.writeText(referralLink);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
+      copiedOk = document.execCommand("copy");
     } catch {
-      setCopied(false);
+      copiedOk = false;
+    } finally {
+      document.body.removeChild(textarea);
     }
+
+    return copiedOk;
   }
+
+  function showCopyFeedback(state: "copied" | "error") {
+    setCopyState(state);
+
+    if (copyTimer.current !== null) {
+      window.clearTimeout(copyTimer.current);
+    }
+
+    copyTimer.current = window.setTimeout(() => {
+      setCopyState("idle");
+      copyTimer.current = null;
+    }, 2500);
+  }
+
+  async function handleCopyLink() {
+    if (!referralLink) {
+      return;
+    }
+
+    let copiedOk = false;
+
+    try {
+      if (navigator.clipboard?.writeText && window.isSecureContext) {
+        await navigator.clipboard.writeText(referralLink);
+        copiedOk = true;
+      } else {
+        copiedOk = copyWithFallback(referralLink);
+      }
+    } catch {
+      copiedOk = copyWithFallback(referralLink);
+    }
+
+    showCopyFeedback(copiedOk ? "copied" : "error");
+  }
+
+  const copyLabel =
+    copyState === "copied"
+      ? t.profile.copied
+      : copyState === "error"
+        ? t.profile.copyError
+        : t.profile.copy;
+
+  const copyButtonClass =
+    copyState === "copied"
+      ? "shrink-0 whitespace-nowrap rounded-full border border-green-300 bg-green-50 px-4 py-2 text-sm text-green-700 transition"
+      : copyState === "error"
+        ? "shrink-0 whitespace-nowrap rounded-full border border-red-300 bg-red-50 px-4 py-2 text-sm text-red-700 transition"
+        : "shrink-0 whitespace-nowrap rounded-full border border-gray-300 px-4 py-2 text-sm text-gray-700 transition hover:bg-white";
 
   return (
     <main className="min-h-screen bg-white text-gray-900">
@@ -293,9 +368,10 @@ export default function ProfilePage() {
                   <button
                     type="button"
                     onClick={handleCopyLink}
-                    className="shrink-0 rounded-full border border-gray-300 px-4 py-2 text-sm text-gray-700 transition hover:bg-white"
+                    aria-live="polite"
+                    className={copyButtonClass}
                   >
-                    {copied ? t.profile.copied : t.profile.copy}
+                    {copyLabel}
                   </button>
                 </div>
 
